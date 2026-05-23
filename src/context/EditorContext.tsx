@@ -27,11 +27,15 @@ import {
   getDeviceColorById,
   getDeviceSpecById,
 } from "../lib/device-instances";
+import { useEditorStorage } from "../lib/useEditorStorage";
 import {
-  loadPersistedState,
-  useEditorPersistence,
-  clearPersistedState,
-} from "../lib/useLocalStorage";
+  clearAll as clearAllStorage,
+  deleteProject as deleteProjectDb,
+  deleteSnapshot as deleteSnapshotDb,
+  listSnapshots as listSnapshotsDb,
+  putSnapshot,
+  type Snapshot,
+} from "../lib/storage/db";
 
 function generateId() {
   return Math.random().toString(36).substring(2, 9);
@@ -44,7 +48,7 @@ interface EditorContextType {
   activeProject: Project;
   createProject: (name: string) => void;
   renameProject: (id: string, name: string) => void;
-  deleteProject: (id: string) => void;
+  deleteProject: (id: string) => Promise<void>;
   switchProject: (id: string) => void;
 
   // State
@@ -118,7 +122,24 @@ interface EditorContextType {
   handleFileUpload: (event: React.ChangeEvent<HTMLInputElement>) => void;
   handleExport: () => void;
   getBackgroundStyle: (screenshot: Screenshot) => string;
-  resetEditor: () => void;
+  resetEditor: () => Promise<void>;
+
+  // Persistence status
+  isSaving: boolean;
+  lastSaved: number;
+  saveError: string | null;
+  saveNow: () => Promise<void>;
+
+  // Snapshots
+  snapshots: Snapshot[];
+  refreshSnapshots: () => Promise<void>;
+  createSnapshot: (name: string) => Promise<void>;
+  restoreSnapshot: (snapshotId: string) => Promise<void>;
+  deleteSnapshot: (snapshotId: string) => Promise<void>;
+
+  // Export / Import
+  exportProjectToFile: (projectId?: string) => void;
+  importProjectFromFile: (file: File) => Promise<void>;
 }
 
 const EditorContext = createContext<EditorContextType | undefined>(undefined);
@@ -237,32 +258,13 @@ const createDefaultProject = (name: string = "My Project"): Project => {
   };
 };
 
-// Load persisted state once on module load
-const persistedState = loadPersistedState();
-
-// Initialize projects from persisted state or create default
-const getInitialProjects = (): Project[] => {
-  if (persistedState?.projects && persistedState.projects.length > 0) {
-    return persistedState.projects.map(normalizeProject);
-  }
-  return [createDefaultProject()];
-};
-
-const getInitialActiveProjectId = (projects: Project[]): string => {
-  if (persistedState?.activeProjectId) {
-    // Verify the project exists
-    const exists = projects.some((p) => p.id === persistedState.activeProjectId);
-    if (exists) return persistedState.activeProjectId;
-  }
-  return projects[0]?.id || generateId();
-};
-
 export const EditorProvider = ({ children }: { children: ReactNode }) => {
-  // Project state
-  const [projects, setProjects] = useState<Project[]>(getInitialProjects);
-  const [activeProjectId, setActiveProjectId] = useState(() =>
-    getInitialActiveProjectId(projects),
+  // Start with a default project; replace once IndexedDB hydration finishes.
+  const [projects, setProjects] = useState<Project[]>(() => [createDefaultProject()]);
+  const [activeProjectId, setActiveProjectId] = useState<string>(
+    () => projects[0].id,
   );
+  const [isHydrated, setIsHydrated] = useState(false);
 
   // Get active project
   const activeProject =
@@ -350,11 +352,191 @@ export const EditorProvider = ({ children }: { children: ReactNode }) => {
     updateProjectState();
   }, [updateProjectState]);
 
-  // Auto-save projects to localStorage
-  useEditorPersistence({
-    projects,
-    activeProjectId,
-  });
+  // Auto-save projects to IndexedDB (enabled only after hydration so we don't
+  // race-overwrite stored data with the bootstrap default project).
+  const {
+    isHydrating,
+    hydrated,
+    isSaving,
+    lastSaved,
+    saveError,
+    flush: saveNow,
+    cancelPending: cancelPendingSave,
+  } = useEditorStorage(projects, activeProjectId, isHydrated);
+
+  // Apply hydrated state once it arrives from IndexedDB.
+  useEffect(() => {
+    if (isHydrating || isHydrated) return;
+    if (hydrated && hydrated.projects.length > 0) {
+      const normalized = hydrated.projects.map(normalizeProject);
+      const activeId =
+        normalized.find((p) => p.id === hydrated.activeProjectId)?.id ??
+        normalized[0].id;
+      const active = normalized.find((p) => p.id === activeId) ?? normalized[0];
+      setProjects(normalized);
+      setActiveProjectId(activeId);
+      setSelectedDeviceIdState(active.selectedDeviceId);
+      setSelectedColorIdState(active.selectedColorId);
+      setExportSizeIdState(active.exportSizeId);
+      setScreenshotsState(active.screenshots);
+      setActiveScreenshotIdState(active.activeScreenshotId);
+      setHeadlineFontSizeState(active.headlineFontSize);
+      setSubheadlineFontSizeState(active.subheadlineFontSize);
+    }
+    setIsHydrated(true);
+  }, [isHydrating, hydrated, isHydrated]);
+
+  // Snapshots list for the currently active project. A request counter
+  // discards results from older active-project ids so a slow IDB read against
+  // the previous project can't overwrite the current project's list.
+  const [snapshots, setSnapshots] = useState<Snapshot[]>([]);
+  const snapshotRequestIdRef = useRef(0);
+  const snapshotProjectIdRef = useRef(activeProjectId);
+
+  const refreshSnapshots = useCallback(async () => {
+    if (!activeProjectId) return;
+    const reqId = ++snapshotRequestIdRef.current;
+    const projectIdAtRequest = activeProjectId;
+    try {
+      const list = await listSnapshotsDb(projectIdAtRequest);
+      if (
+        reqId === snapshotRequestIdRef.current &&
+        snapshotProjectIdRef.current === projectIdAtRequest
+      ) {
+        setSnapshots(list);
+      }
+    } catch (err) {
+      console.error("Failed to load snapshots:", err);
+    }
+  }, [activeProjectId]);
+
+  // Clear stale snapshots immediately on project change so the UI never shows
+  // another project's versions, even before refreshSnapshots resolves.
+  useEffect(() => {
+    snapshotProjectIdRef.current = activeProjectId;
+    setSnapshots([]);
+    if (isHydrated) void refreshSnapshots();
+  }, [isHydrated, activeProjectId, refreshSnapshots]);
+
+  const createSnapshot = useCallback(
+    async (name: string) => {
+      const trimmed = name.trim();
+      if (!trimmed) return;
+      // Make sure the latest in-memory state is persisted first.
+      await saveNow();
+      const project = projects.find((p) => p.id === activeProjectId);
+      if (!project) return;
+      const snapshot: Snapshot = {
+        id: generateId(),
+        projectId: activeProjectId,
+        name: trimmed,
+        createdAt: Date.now(),
+        project: { ...project, updatedAt: Date.now() },
+      };
+      await putSnapshot(snapshot);
+      await refreshSnapshots();
+    },
+    [activeProjectId, projects, refreshSnapshots, saveNow],
+  );
+
+  const restoreSnapshot = useCallback(
+    async (snapshotId: string) => {
+      const snap = snapshots.find((s) => s.id === snapshotId);
+      if (!snap) return;
+      // Guard against stale list entries that belong to a different project.
+      if (snap.projectId !== activeProjectId) {
+        console.warn(
+          `Refusing to restore snapshot ${snap.id} from project ${snap.projectId} into active project ${activeProjectId}`,
+        );
+        return;
+      }
+      const normalized = normalizeProject({
+        ...snap.project,
+        id: activeProjectId,
+        updatedAt: Date.now(),
+      });
+      setProjects((prev) =>
+        prev.map((p) => (p.id === activeProjectId ? normalized : p)),
+      );
+      setSelectedDeviceIdState(normalized.selectedDeviceId);
+      setSelectedColorIdState(normalized.selectedColorId);
+      setExportSizeIdState(normalized.exportSizeId);
+      setScreenshotsState(normalized.screenshots);
+      setActiveScreenshotIdState(normalized.activeScreenshotId);
+      setHeadlineFontSizeState(normalized.headlineFontSize);
+      setSubheadlineFontSizeState(normalized.subheadlineFontSize);
+      setSelectedElement(null);
+    },
+    [snapshots, activeProjectId],
+  );
+
+  const deleteSnapshot = useCallback(
+    async (snapshotId: string) => {
+      await deleteSnapshotDb(snapshotId);
+      await refreshSnapshots();
+    },
+    [refreshSnapshots],
+  );
+
+  const exportProjectToFile = useCallback(
+    (projectId?: string) => {
+      const target = projects.find((p) => p.id === (projectId ?? activeProjectId));
+      if (!target) return;
+      const payload = {
+        format: "appshots-project",
+        version: 1,
+        exportedAt: new Date().toISOString(),
+        project: target,
+      };
+      const blob = new Blob([JSON.stringify(payload, null, 2)], {
+        type: "application/json",
+      });
+      const url = URL.createObjectURL(blob);
+      const safeName = target.name.replace(/[^a-z0-9-_]+/gi, "-").toLowerCase();
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `${safeName || "project"}.appshots.json`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    },
+    [projects, activeProjectId],
+  );
+
+  const importProjectFromFile = useCallback(
+    async (file: File) => {
+      const text = await file.text();
+      let parsed: unknown;
+      try {
+        parsed = JSON.parse(text);
+      } catch {
+        throw new Error("Selected file is not valid JSON.");
+      }
+      const raw = parsed as { format?: string; project?: Project };
+      if (raw?.format !== "appshots-project" || !raw.project) {
+        throw new Error("Selected file is not an AppShots project export.");
+      }
+      const imported = normalizeProject({
+        ...raw.project,
+        id: generateId(),
+        name: `${raw.project.name} (imported)`,
+        updatedAt: Date.now(),
+        createdAt: Date.now(),
+      });
+      setProjects((prev) => [...prev, imported]);
+      setActiveProjectId(imported.id);
+      setSelectedDeviceIdState(imported.selectedDeviceId);
+      setSelectedColorIdState(imported.selectedColorId);
+      setExportSizeIdState(imported.exportSizeId);
+      setScreenshotsState(imported.screenshots);
+      setActiveScreenshotIdState(imported.activeScreenshotId);
+      setHeadlineFontSizeState(imported.headlineFontSize);
+      setSubheadlineFontSizeState(imported.subheadlineFontSize);
+      setSelectedElement(null);
+    },
+    [],
+  );
 
   // Wrapper functions that update both local state and project
   const setSelectedDeviceId = (id: string) => {
@@ -409,11 +591,28 @@ export const EditorProvider = ({ children }: { children: ReactNode }) => {
     setSubheadlineFontSizeState(size);
   };
 
+  // Apply a project's per-field state to the editor without relying on the
+  // (possibly stale) `projects` array. Used by createProject, switchProject,
+  // deleteProject, restoreSnapshot, importProject and resetEditor.
+  const applyProjectToState = useCallback((project: Project) => {
+    setActiveProjectId(project.id);
+    setSelectedDeviceIdState(project.selectedDeviceId);
+    setSelectedColorIdState(project.selectedColorId);
+    setExportSizeIdState(project.exportSizeId);
+    setScreenshotsState(project.screenshots);
+    setActiveScreenshotIdState(project.activeScreenshotId);
+    setHeadlineFontSizeState(project.headlineFontSize);
+    setSubheadlineFontSizeState(project.subheadlineFontSize);
+    setSelectedElement(null);
+  }, []);
+
   // Project management functions
   const createProject = (name: string) => {
     const newProject = createDefaultProject(name);
     setProjects((prev) => [...prev, newProject]);
-    switchProject(newProject.id);
+    // Don't go through switchProject — its lookup against `projects` won't
+    // see the new project until React commits the setProjects above.
+    applyProjectToState(newProject);
   };
 
   const renameProject = (id: string, name: string) => {
@@ -424,34 +623,37 @@ export const EditorProvider = ({ children }: { children: ReactNode }) => {
     );
   };
 
-  const deleteProject = (id: string) => {
+  const deleteProject = async (id: string) => {
     // Don't delete the last project
     if (projects.length <= 1) return;
 
-    setProjects((prev) => prev.filter((p) => p.id !== id));
+    // CRITICAL: Cancel any pending auto-save before deleting, so a queued
+    // `saveEditorState` doesn't resurrect the deleted project. Then await the
+    // DB deletion to complete before allowing the next auto-save.
+    cancelPendingSave();
+    const remaining = projects.filter((p) => p.id !== id);
+    setProjects(remaining);
 
-    // If deleting active project, switch to another
-    if (id === activeProjectId) {
-      const remaining = projects.filter((p) => p.id !== id);
-      if (remaining.length > 0) {
-        switchProject(remaining[0].id);
-      }
+    // If deleting active project, switch state to a remaining one directly so
+    // we don't depend on the not-yet-committed `projects` value.
+    if (id === activeProjectId && remaining.length > 0) {
+      applyProjectToState(remaining[0]);
+    }
+
+    // Drop the project (and its snapshots, via the cascading delete in db.ts)
+    // from IndexedDB. Without this, auto-save's upsert-only behaviour leaves
+    // the deleted record in storage and it reappears on the next reload.
+    try {
+      await deleteProjectDb(id);
+    } catch (err) {
+      console.error(`Failed to delete project ${id}:`, err);
     }
   };
 
   const switchProject = (id: string) => {
     const project = projects.find((p) => p.id === id);
     if (!project) return;
-
-    setActiveProjectId(id);
-    setSelectedDeviceIdState(project.selectedDeviceId);
-    setSelectedColorIdState(project.selectedColorId);
-    setExportSizeIdState(project.exportSizeId);
-    setScreenshotsState(project.screenshots);
-    setActiveScreenshotIdState(project.activeScreenshotId);
-    setHeadlineFontSizeState(project.headlineFontSize);
-    setSubheadlineFontSizeState(project.subheadlineFontSize);
-    setSelectedElement(null);
+    applyProjectToState(project);
   };
 
   const selectedDevice =
@@ -956,22 +1158,23 @@ export const EditorProvider = ({ children }: { children: ReactNode }) => {
   };
 
   /**
-   * Resets the editor to default state and clears localStorage
+   * Resets the editor to default state and clears IndexedDB (and any legacy
+   * localStorage data left over from older versions). Cancels pending saves
+   * first so a queued debounce doesn't write the pre-reset state back over
+   * the cleared store right after we wipe it.
    */
-  const resetEditor = () => {
-    clearPersistedState();
+  const resetEditor = async () => {
+    cancelPendingSave();
+    try {
+      await clearAllStorage();
+    } catch (err) {
+      console.error("Failed to clear IndexedDB during reset:", err);
+    }
     const defaultProject = createDefaultProject();
     setProjects([defaultProject]);
-    setActiveProjectId(defaultProject.id);
-    setSelectedDeviceIdState(defaultProject.selectedDeviceId);
-    setSelectedColorIdState(defaultProject.selectedColorId);
-    setExportSizeIdState(defaultProject.exportSizeId);
-    setScreenshotsState(defaultProject.screenshots);
-    setActiveScreenshotIdState(defaultProject.activeScreenshotId);
-    setHeadlineFontSizeState(defaultProject.headlineFontSize);
-    setSubheadlineFontSizeState(defaultProject.subheadlineFontSize);
-    setSelectedElement(null);
+    applyProjectToState(defaultProject);
     setIsStarModalOpen(false);
+    setSnapshots([]);
   };
 
   return (
@@ -1043,6 +1246,20 @@ export const EditorProvider = ({ children }: { children: ReactNode }) => {
         handleExport,
         getBackgroundStyle,
         resetEditor,
+        // Persistence status
+        isSaving,
+        lastSaved,
+        saveError,
+        saveNow,
+        // Snapshots
+        snapshots,
+        refreshSnapshots,
+        createSnapshot,
+        restoreSnapshot,
+        deleteSnapshot,
+        // Export / Import
+        exportProjectToFile,
+        importProjectFromFile,
       }}
     >
       {children}

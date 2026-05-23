@@ -1,0 +1,24 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "default",
+  "description": "Default permissions for the AppShots window",
+  "windows": ["main"],
+  "permissions": [
+    "core:default",
+    "dialog:default",
+    "shell:default",
+    "fs:allow-appdata-read-recursive",
+    "fs:allow-appdata-write-recursive",
+    "fs:allow-appdata-meta-recursive",
+    {
+      "identifier": "fs:scope",
+      "allow": [
+        { "path": "$APPDATA/projects" },
+        { "path": "$APPDATA/projects/**" },
+        { "path": "$APPDATA/snapshots" },
+        { "path": "$APPDATA/snapshots/**" },
+        { "path": "$APPDATA/meta.json" }
+      ]
+    }
+  ]
+}

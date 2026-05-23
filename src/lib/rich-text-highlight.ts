@@ -1,3 +1,5 @@
+import DOMPurify, { type Config as DOMPurifyConfig } from "dompurify";
+
 export const RICH_TEXT_HIGHLIGHT_ATTRIBUTE = "data-rich-text-highlight";
 export const RICH_TEXT_HIGHLIGHT_COLOR_VAR = "--rich-text-highlight-color";
 export const RICH_TEXT_HIGHLIGHT_SPREAD_VAR = "--rich-text-highlight-spread";
@@ -96,17 +98,39 @@ export const normalizeRichTextHighlightRoot = (root: ParentNode): boolean => {
   return changed;
 };
 
+const SANITIZE_CONFIG: DOMPurifyConfig = {
+  ALLOWED_TAGS: [
+    "b",
+    "i",
+    "u",
+    "s",
+    "strong",
+    "em",
+    "mark",
+    "span",
+    "font",
+    "br",
+    "div",
+    "p",
+  ],
+  ALLOWED_ATTR: ["style", "class", "color", RICH_TEXT_HIGHLIGHT_ATTRIBUTE],
+};
+
+export const sanitizeRichTextHtml = (html: string): string =>
+  DOMPurify.sanitize(html, SANITIZE_CONFIG);
+
 export const normalizeRichTextHighlights = (html: string): string => {
   if (!html) {
     return html;
   }
 
+  const sanitized = sanitizeRichTextHtml(html);
   const parser = new DOMParser();
-  const doc = parser.parseFromString(`<div>${html}</div>`, "text/html");
+  const doc = parser.parseFromString(`<div>${sanitized}</div>`, "text/html");
   const root = doc.body.firstElementChild;
 
   if (!root) {
-    return html;
+    return sanitized;
   }
 
   normalizeRichTextHighlightRoot(root);

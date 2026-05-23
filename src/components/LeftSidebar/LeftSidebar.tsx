@@ -16,7 +16,7 @@ import { devices, exportSizes } from "../../constants";
 import { SidebarHeader } from "./SidebarHeader";
 import { DeviceSection } from "./DeviceSection";
 import { ExportSection } from "./ExportSection";
-import { ProjectSwitcher } from "../ProjectSwitcher";
+import { ProjectSwitcher, SaveStatus, ProjectActions } from "../ProjectSwitcher";
 import { STYLES } from "./constants";
 
 /**
@@ -51,9 +51,13 @@ export const LeftSidebar = () => {
     <aside className={STYLES.sidebar}>
       <SidebarHeader />
 
-      {/* Project Switcher */}
-      <div className="px-4 pb-4 border-b border-zinc-800">
+      {/* Project Switcher + persistence controls */}
+      <div className="relative px-4 pb-4 border-b border-zinc-800">
         <ProjectSwitcher />
+        <div className="mt-2 flex items-center justify-between gap-2">
+          <SaveStatus />
+        </div>
+        <ProjectActions />
       </div>
 
       <div className={STYLES.content}>

@@ -62,8 +62,12 @@ A free, open-source tool to create stunning, high-converting screenshots for the
 ### 📋 Project Management
 
 - **Multiple projects** — create, rename, switch between, and delete projects
-- **Auto-save** — all projects and settings persist to localStorage across sessions
-- **Reset to defaults** — clear everything and start fresh
+- **IndexedDB persistence** — projects (including uploaded screenshots, overlay images, fonts, colors, and 3D settings) are saved to the browser's IndexedDB, which has gigabyte-scale capacity. Replaces the old localStorage approach so screenshot-heavy projects no longer silently overflow the 5–10 MB quota
+- **Auto-save with live status** — debounced writes after every change, with an inline "Saving… / Saved · 2s ago" indicator next to the project switcher. Click the indicator to force an immediate save
+- **Named snapshots** — freeze the current project as a named version before risky edits, then restore or delete it from the Snapshots panel
+- **Export / Import** — download the active project as a portable `.appshots.json` file (full state, including base64 screenshots and overlays) and re-import it on another machine or as a backup
+- **Automatic migration** — projects saved by the old localStorage build are migrated into IndexedDB on first load
+- **Reset to defaults** — clear IndexedDB (projects + snapshots) and start fresh
 
 ### 📦 Export
 
@@ -148,7 +152,8 @@ src/
 │   ├── export-utils.ts      # Canvas-based screenshot export (flat & 3D)
 │   ├── google-fonts.ts      # Google Fonts API loader
 │   ├── rich-text-canvas.ts  # Rich text rendering for canvas export
-│   └── useLocalStorage.ts   # Persistence hooks
+│   ├── storage/db.ts        # IndexedDB layer: projects, snapshots, meta
+│   └── useEditorStorage.ts  # React hook: hydration, auto-save, status
 ├── routes/
 │   ├── __root.tsx           # Root layout
 │   └── index.tsx            # Home page

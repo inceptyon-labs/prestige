@@ -30,7 +30,7 @@ interface ProjectItemProps {
   isActive: boolean;
   onSelect: () => void;
   onRename: (name: string) => void;
-  onDelete: () => void;
+  onDelete: () => Promise<void>;
   canDelete: boolean;
 }
 
@@ -130,9 +130,9 @@ const ProjectItem = ({
         </button>
         {canDelete && (
           <button
-            onClick={(e) => {
+            onClick={async (e) => {
               e.stopPropagation();
-              onDelete();
+              await onDelete();
             }}
             className="p-1 hover:bg-zinc-700 rounded text-zinc-400 hover:text-red-400"
             title="Delete project"
@@ -246,7 +246,7 @@ export const ProjectSwitcher = () => {
                   setIsOpen(false);
                 }}
                 onRename={(name) => renameProject(project.id, name)}
-                onDelete={() => deleteProject(project.id)}
+                onDelete={async () => await deleteProject(project.id)}
                 canDelete={projects.length > 1}
               />
             ))}
