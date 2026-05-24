@@ -35,9 +35,6 @@ export const getActiveStyles = (): ActiveStyles => ({
   bold: document.queryCommandState("bold"),
   italic: document.queryCommandState("italic"),
   underline: document.queryCommandState("underline"),
-  alignLeft: document.queryCommandState("justifyLeft"),
-  alignCenter: document.queryCommandState("justifyCenter"),
-  alignRight: document.queryCommandState("justifyRight"),
 });
 
 /**

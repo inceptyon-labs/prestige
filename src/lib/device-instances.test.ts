@@ -40,14 +40,14 @@ describe("ensureDeviceInstances", () => {
           offsetY: 9,
         },
       },
-      "iphone-15-pro-max",
-      "natural",
+      "iphone-17-pro-max",
+      "silver",
     );
 
     expect(devices).toHaveLength(1);
     expect(devices[0]).toMatchObject({
-      deviceId: "iphone-15-pro-max",
-      colorId: "natural",
+      deviceId: "iphone-17-pro-max",
+      colorId: "silver",
       screenshotSrc: "data:image/png;base64,legacy",
       scale: 72,
       y: 42,
@@ -71,14 +71,14 @@ describe("ensureDeviceInstances", () => {
       devices: [
         {
           id: "device-a",
-          deviceId: "iphone-15-pro-max",
-          colorId: "white",
+          deviceId: "iphone-17-pro-max",
+          colorId: "silver",
           x: 20,
           y: 25,
         },
         {
           id: "device-b",
-          deviceId: "samsung-galaxy-s24-ultra",
+          deviceId: "samsung-galaxy-s25-ultra",
           colorId: "titanium-black",
           x: 70,
           y: 28,
@@ -90,14 +90,14 @@ describe("ensureDeviceInstances", () => {
     expect(devices).toHaveLength(2);
     expect(devices[0]).toMatchObject({
       id: "device-a",
-      deviceId: "iphone-15-pro-max",
-      colorId: "white",
+      deviceId: "iphone-17-pro-max",
+      colorId: "silver",
       x: 20,
       y: 25,
     });
     expect(devices[1]).toMatchObject({
       id: "device-b",
-      deviceId: "samsung-galaxy-s24-ultra",
+      deviceId: "samsung-galaxy-s25-ultra",
       colorId: "titanium-black",
       x: 70,
       y: 28,

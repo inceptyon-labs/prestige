@@ -12,9 +12,6 @@ describe("EditorToolbar", () => {
           bold: false,
           italic: false,
           underline: false,
-          alignLeft: true,
-          alignCenter: false,
-          alignRight: false,
         }}
         textColor="#ffffff"
         backgroundColor="#fef08a"

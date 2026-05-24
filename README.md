@@ -1,15 +1,24 @@
-# 📱 App Store Screenshot Generator
+<p align="center">
+  <img src="src-tauri/icons/icon.png" width="180" alt="Prestige logo" />
+</p>
 
-A free, open-source tool to create stunning, high-converting screenshots for the Apple App Store and Google Play Store in minutes. Design professional app previews with an intuitive drag-and-drop editor.
+<h1 align="center">Prestige</h1>
 
-🔗 **Live Demo:** [appshots.appstate.xyz](https://appshots.appstate.xyz/)
+<p align="center">App Store screenshot generator — design polished marketing visuals with realistic device mockups, 3D rendering, multi-device compositions, and batch export.</p>
 
-![App Store Screenshot Generator](public/demo-image.png)
+<p align="center">
+  🔗 <a href="https://prestige.inceptyonlabs.com/">prestige.inceptyonlabs.com</a>
+</p>
 
-![License](https://img.shields.io/badge/license-MIT-blue.svg)
-![React](https://img.shields.io/badge/React-19-61DAFB?logo=react)
-![TypeScript](https://img.shields.io/badge/TypeScript-5.7-3178C6?logo=typescript)
-![Tailwind CSS](https://img.shields.io/badge/Tailwind%20CSS-4.0-38B2AC?logo=tailwindcss)
+<p align="center">
+  <img src="https://img.shields.io/badge/license-AGPL--3.0-blue.svg" alt="License: AGPL-3.0" />
+  <img src="https://img.shields.io/badge/React-19-61DAFB?logo=react" alt="React 19" />
+  <img src="https://img.shields.io/badge/TypeScript-5.7-3178C6?logo=typescript" alt="TypeScript 5.7" />
+  <img src="https://img.shields.io/badge/Tauri-2-FFC131?logo=tauri" alt="Tauri 2" />
+  <img src="https://img.shields.io/badge/Tailwind%20CSS-4.0-38B2AC?logo=tailwindcss" alt="Tailwind CSS 4" />
+</p>
+
+![Prestige editor](public/demo-image.png)
 
 ## ✨ Features
 
@@ -65,7 +74,7 @@ A free, open-source tool to create stunning, high-converting screenshots for the
 - **IndexedDB persistence** — projects (including uploaded screenshots, overlay images, fonts, colors, and 3D settings) are saved to the browser's IndexedDB, which has gigabyte-scale capacity. Replaces the old localStorage approach so screenshot-heavy projects no longer silently overflow the 5–10 MB quota
 - **Auto-save with live status** — debounced writes after every change, with an inline "Saving… / Saved · 2s ago" indicator next to the project switcher. Click the indicator to force an immediate save
 - **Named snapshots** — freeze the current project as a named version before risky edits, then restore or delete it from the Snapshots panel
-- **Export / Import** — download the active project as a portable `.appshots.json` file (full state, including base64 screenshots and overlays) and re-import it on another machine or as a backup
+- **Export / Import** — download the active project as a portable `.prestige.json` file (full state, including base64 screenshots and overlays) and re-import it on another machine or as a backup
 - **Automatic migration** — projects saved by the old localStorage build are migrated into IndexedDB on first load
 - **Reset to defaults** — clear IndexedDB (projects + snapshots) and start fresh
 
@@ -98,8 +107,8 @@ A free, open-source tool to create stunning, high-converting screenshots for the
 
 ```bash
 # Clone the repository
-git clone https://github.com/oyeolamilekan/appshots.git
-cd app-screenshot-generator
+git clone https://github.com/inceptyon-labs/prestige.git
+cd prestige
 
 # Install dependencies
 bun install
@@ -181,24 +190,17 @@ src/
 
 ## 🤝 Contributing
 
-Contributions are welcome! Please feel free to submit a Pull Request.
+Contributions are welcome — see [CONTRIBUTING.md](CONTRIBUTING.md) for setup, commit style, and PR process. Please also read the [Code of Conduct](CODE_OF_CONDUCT.md) before participating.
 
-1. Fork the repository
-2. Create your feature branch (`git checkout -b feature/amazing-feature`)
-3. Commit your changes (`git commit -m 'Add some amazing feature'`)
-4. Push to the branch (`git push origin feature/amazing-feature`)
-5. Open a Pull Request
-
-### Development Guidelines
-
-- Follow the existing code style
-- Write tests for new features
-- Update documentation as needed
-- Keep commits atomic and well-described
+Security issues: please report privately per the [Security Policy](SECURITY.md) rather than opening a public issue.
 
 ## 📄 License
 
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+Prestige is licensed under the **GNU Affero General Public License v3.0 or later** (AGPL-3.0-or-later) — see [LICENSE](LICENSE).
+
+Prestige is a derivative work of [`oyeolamilekan/appshots`](https://github.com/oyeolamilekan/appshots), originally released under the MIT License. The original MIT copyright notice is preserved in [LICENSE.upstream-MIT](LICENSE.upstream-MIT).
+
+Copyright (c) 2026 Inceptyon Labs LLC.
 
 ## 🙏 Acknowledgments
 
@@ -209,7 +211,7 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 ## 📬 Contact
 
-- Create an [issue](https://github.com/oyeolamilekan/appshots/issues) for bug reports or feature requests
+- Create an [issue](https://github.com/inceptyon-labs/prestige/issues) for bug reports or feature requests
 - Star ⭐ this repo if you find it useful!
 
 ---

@@ -28,9 +28,9 @@ interface SelectionButtonProps {
  *
  * @example
  * <SelectionButton
- *   label="iPhone 15 Pro"
- *   isSelected={selectedId === "iphone-15-pro"}
- *   onClick={() => setSelectedId("iphone-15-pro")}
+ *   label="iPhone 17 Pro Max"
+ *   isSelected={selectedId === "iphone-17-pro-max"}
+ *   onClick={() => setSelectedId("iphone-17-pro-max")}
  * />
  */
 export const SelectionButton = ({

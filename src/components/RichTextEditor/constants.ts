@@ -13,9 +13,6 @@ export const DEFAULT_ACTIVE_STYLES: ActiveStyles = {
   bold: false,
   italic: false,
   underline: false,
-  alignLeft: true,
-  alignCenter: false,
-  alignRight: false,
 };
 
 /**

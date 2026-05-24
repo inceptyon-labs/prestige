@@ -1,7 +1,7 @@
 /**
  * Filesystem storage backend (Tauri build).
  *
- * Layout under $APPDATA (i.e. ~/Library/Application Support/io.inceptyonlabs.appshots
+ * Layout under $APPDATA (i.e. ~/Library/Application Support/io.inceptyonlabs.prestige
  * on macOS, the equivalent on Windows/Linux):
  *
  *   meta.json                <- { activeProjectId, schemaVersion, migrated:* flags }

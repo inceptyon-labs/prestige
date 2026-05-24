@@ -1,151 +1,114 @@
-import type { DeviceSpec, GradientPreset, ExportSize } from "./types";
+import type {
+  DeviceSpec,
+  GradientPreset,
+  ExportSize,
+  PlatformKey,
+} from "./types";
 
-export const GITHUB_REPO_URL = "https://github.com/oyeolamilekan/appshots";
+export const GITHUB_REPO_URL = "https://github.com/inceptyon-labs/prestige";
 
 export const devices: DeviceSpec[] = [
   {
-    id: "iphone-15-pro-max",
-    label: "iPhone 15 Pro Max",
-    width: 1290,
-    height: 2796,
+    id: "iphone-17-pro-max",
+    label: "iPhone 17 Pro Max",
+    width: 1320,
+    height: 2868,
     screenInset: { top: 20, right: 20, bottom: 20, left: 20 },
-    cornerRadius: 110,
+    cornerRadius: 115,
     frameRadius: { outer: "14%/6.5%", inner: "12.5%/5.8%" },
     notchWidth: 250,
     notchHeight: 70,
     hasIsland: true,
     colors: [
       {
-        id: "black",
+        id: "cosmic-orange",
+        label: "Cosmic Orange",
+        frame: "#C8612A",
+        frameColors: ["#E07A3E", "#C8612A", "#A04E1E", "#C8612A", "#E07A3E"],
+        screen: "#000",
+      },
+      {
+        id: "deep-blue",
+        label: "Deep Blue",
+        frame: "#1F2D4A",
+        frameColors: ["#324367", "#1F2D4A", "#141E33", "#1F2D4A", "#324367"],
+        screen: "#000",
+      },
+      {
+        id: "silver",
+        label: "Silver",
+        frame: "#D9D9DB",
+        frameColors: ["#EAEAEC", "#D9D9DB", "#BFBFC2", "#D9D9DB", "#EAEAEC"],
+        screen: "#000",
+      },
+      {
+        id: "natural-titanium",
+        label: "Natural Titanium",
+        frame: "#8C8883",
+        frameColors: ["#AAA59E", "#8C8883", "#75726D", "#8C8883", "#AAA59E"],
+        screen: "#000",
+      },
+      {
+        id: "black-titanium",
         label: "Black Titanium",
         frame: "#282828",
         frameColors: ["#4a4a4a", "#282828", "#1c1c1e", "#282828", "#4a4a4a"],
         screen: "#000",
       },
       {
-        id: "natural",
-        label: "Natural",
-        frame: "#8C8883",
-        frameColors: ["#AAA59E", "#8C8883", "#75726D", "#8C8883", "#AAA59E"],
-        screen: "#000",
-      },
-      {
-        id: "blue",
-        label: "Blue",
-        frame: "#2F3846",
-        frameColors: ["#455163", "#2F3846", "#202630", "#2F3846", "#455163"],
-        screen: "#000",
-      },
-      {
-        id: "white",
-        label: "White",
+        id: "white-titanium",
+        label: "White Titanium",
         frame: "#E3E3E4",
         frameColors: ["#F2F2F2", "#E3E3E4", "#D1D1D2", "#E3E3E4", "#F2F2F2"],
         screen: "#000",
       },
-    ],
-  },
-  {
-    id: "iphone-15-pro",
-    label: "iPhone 15 Pro",
-    width: 1179,
-    height: 2556,
-    screenInset: { top: 18, right: 18, bottom: 18, left: 18 },
-    cornerRadius: 100,
-    frameRadius: { outer: "14%/6.5%", inner: "12.5%/5.8%" },
-    notchWidth: 230,
-    notchHeight: 65,
-    hasIsland: true,
-    colors: [
       {
-        id: "black",
-        label: "Black Titanium",
-        frame: "#282828",
-        frameColors: ["#4a4a4a", "#282828", "#1c1c1e", "#282828", "#4a4a4a"],
+        id: "gold",
+        label: "Gold",
+        frame: "#D4B782",
+        frameColors: ["#E5CC9D", "#D4B782", "#B89A66", "#D4B782", "#E5CC9D"],
         screen: "#000",
       },
       {
-        id: "natural",
-        label: "Natural",
-        frame: "#8C8883",
-        frameColors: ["#AAA59E", "#8C8883", "#75726D", "#8C8883", "#AAA59E"],
+        id: "rose",
+        label: "Rose",
+        frame: "#D9A7A7",
+        frameColors: ["#E8BFBF", "#D9A7A7", "#BF8C8C", "#D9A7A7", "#E8BFBF"],
         screen: "#000",
       },
       {
-        id: "blue",
-        label: "Blue",
-        frame: "#2F3846",
-        frameColors: ["#455163", "#2F3846", "#202630", "#2F3846", "#455163"],
-        screen: "#000",
-      },
-      {
-        id: "white",
-        label: "White",
-        frame: "#E3E3E4",
-        frameColors: ["#F2F2F2", "#E3E3E4", "#D1D1D2", "#E3E3E4", "#F2F2F2"],
+        id: "midnight-green",
+        label: "Midnight Green",
+        frame: "#3B5043",
+        frameColors: ["#4D6557", "#3B5043", "#293B30", "#3B5043", "#4D6557"],
         screen: "#000",
       },
     ],
   },
   {
-    id: "iphone-14",
-    label: "iPhone 14",
-    width: 1170,
-    height: 2532,
-    screenInset: { top: 18, right: 18, bottom: 18, left: 18 },
-    cornerRadius: 95,
-    frameRadius: { outer: "14%/6.5%", inner: "12.5%/5.8%" },
-    notchWidth: 210,
-    notchHeight: 60,
-    hasIsland: false,
-    colors: [
-      {
-        id: "midnight",
-        label: "Midnight",
-        frame: "#2B3037",
-        frameColors: ["#3A414A", "#2B3037", "#1E2227", "#2B3037", "#3A414A"],
-        screen: "#000",
-      },
-      {
-        id: "purple",
-        label: "Purple",
-        frame: "#E5DDEA",
-        frameColors: ["#F0EAF5", "#E5DDEA", "#D5CDDA", "#E5DDEA", "#F0EAF5"],
-        screen: "#000",
-      },
-      {
-        id: "blue",
-        label: "Blue",
-        frame: "#A7C1D9",
-        frameColors: ["#BDD3E8", "#A7C1D9", "#92AAC0", "#A7C1D9", "#BDD3E8"],
-        screen: "#000",
-      },
-      {
-        id: "red",
-        label: "Red",
-        frame: "#FC0324",
-        frameColors: ["#FF3B55", "#FC0324", "#D4001A", "#FC0324", "#FF3B55"],
-        screen: "#000",
-      },
-    ],
-  },
-  {
-    id: "ipad-pro-12-9",
-    label: 'iPad Pro 12.9"',
-    width: 2048,
-    height: 2732,
+    id: "ipad-pro-13",
+    label: 'iPad Pro 13" (M4)',
+    width: 2064,
+    height: 2752,
     screenInset: { top: 40, right: 40, bottom: 40, left: 40 },
-    cornerRadius: 50,
+    cornerRadius: 55,
     frameRadius: { outer: "3%/2.5%", inner: "2.5%/2%" },
     notchWidth: 0,
     notchHeight: 0,
     hasIsland: false,
     colors: [
       {
-        id: "black",
-        label: "Black",
+        id: "space-black",
+        label: "Space Black",
         frame: "#1c1c1e",
         frameColors: ["#2c2c2e", "#1c1c1e", "#0d0d0d", "#1c1c1e", "#2c2c2e"],
+        screen: "#000",
+      },
+      {
+        id: "silver",
+        label: "Silver",
+        frame: "#e0e0e0",
+        frameColors: ["#ffffff", "#e0e0e0", "#d1d1d6", "#e0e0e0", "#ffffff"],
         screen: "#000",
       },
       {
@@ -156,31 +119,101 @@ export const devices: DeviceSpec[] = [
         screen: "#000",
       },
       {
-        id: "silver",
-        label: "Silver",
-        frame: "#e0e0e0",
-        frameColors: ["#ffffff", "#e0e0e0", "#d1d1d6", "#e0e0e0", "#ffffff"],
+        id: "starlight",
+        label: "Starlight",
+        frame: "#EDE6D6",
+        frameColors: ["#F7F1E3", "#EDE6D6", "#D9D1BC", "#EDE6D6", "#F7F1E3"],
+        screen: "#000",
+      },
+      {
+        id: "midnight",
+        label: "Midnight",
+        frame: "#1A1F2B",
+        frameColors: ["#2A2F3B", "#1A1F2B", "#10141C", "#1A1F2B", "#2A2F3B"],
         screen: "#000",
       },
     ],
   },
   {
-    id: "samsung-galaxy-s24-ultra",
-    label: "Samsung Galaxy S24 Ultra",
+    id: "macbook-pro-16",
+    label: 'MacBook Pro 16"',
+    width: 2880,
+    height: 1800,
+    screenInset: { top: 35, right: 30, bottom: 30, left: 30 },
+    cornerRadius: 14,
+    frameRadius: { outer: "0.6%/1%", inner: "0.4%/0.7%" },
+    notchWidth: 230,
+    notchHeight: 28,
+    hasIsland: false,
+    colors: [
+      {
+        id: "space-black",
+        label: "Space Black",
+        frame: "#1F1F22",
+        frameColors: ["#33333A", "#1F1F22", "#0F0F12", "#1F1F22", "#33333A"],
+        screen: "#000",
+      },
+      {
+        id: "silver",
+        label: "Silver",
+        frame: "#D9D9DB",
+        frameColors: ["#EAEAEC", "#D9D9DB", "#BFBFC2", "#D9D9DB", "#EAEAEC"],
+        screen: "#000",
+      },
+      {
+        id: "space-gray",
+        label: "Space Gray",
+        frame: "#4E4E50",
+        frameColors: ["#636365", "#4E4E50", "#3A3A3C", "#4E4E50", "#636365"],
+        screen: "#000",
+      },
+      {
+        id: "midnight",
+        label: "Midnight",
+        frame: "#1A1F2B",
+        frameColors: ["#2A2F3B", "#1A1F2B", "#10141C", "#1A1F2B", "#2A2F3B"],
+        screen: "#000",
+      },
+      {
+        id: "starlight",
+        label: "Starlight",
+        frame: "#EDE6D6",
+        frameColors: ["#F7F1E3", "#EDE6D6", "#D9D1BC", "#EDE6D6", "#F7F1E3"],
+        screen: "#000",
+      },
+    ],
+  },
+  {
+    id: "samsung-galaxy-s25-ultra",
+    label: "Samsung Galaxy S25 Ultra",
     width: 1440,
     height: 3120,
-    screenInset: { top: 16, right: 16, bottom: 16, left: 16 },
-    cornerRadius: 40,
+    screenInset: { top: 14, right: 14, bottom: 14, left: 14 },
+    cornerRadius: 45,
     frameRadius: { outer: "4%/2%", inner: "3.5%/1.8%" },
     notchWidth: 0,
     notchHeight: 0,
     hasIsland: false,
     colors: [
       {
+        id: "titanium-silverblue",
+        label: "Titanium Silverblue",
+        frame: "#A8B5C4",
+        frameColors: ["#BFCAD7", "#A8B5C4", "#8E9CAD", "#A8B5C4", "#BFCAD7"],
+        screen: "#000",
+      },
+      {
         id: "titanium-black",
         label: "Titanium Black",
         frame: "#1a1a1a",
         frameColors: ["#2d2d2d", "#1a1a1a", "#0f0f0f", "#1a1a1a", "#2d2d2d"],
+        screen: "#000",
+      },
+      {
+        id: "titanium-whitesilver",
+        label: "Titanium Whitesilver",
+        frame: "#E5E5E7",
+        frameColors: ["#F2F2F4", "#E5E5E7", "#CFCFD1", "#E5E5E7", "#F2F2F4"],
         screen: "#000",
       },
       {
@@ -191,33 +224,54 @@ export const devices: DeviceSpec[] = [
         screen: "#000",
       },
       {
-        id: "titanium-violet",
-        label: "Titanium Violet",
-        frame: "#9b8aa5",
-        frameColors: ["#b0a0ba", "#9b8aa5", "#867590", "#9b8aa5", "#b0a0ba"],
+        id: "titanium-pinkgold",
+        label: "Titanium Pink Gold",
+        frame: "#D9B6A3",
+        frameColors: ["#E8CABA", "#D9B6A3", "#BF9C89", "#D9B6A3", "#E8CABA"],
         screen: "#000",
       },
       {
-        id: "titanium-yellow",
-        label: "Titanium Yellow",
-        frame: "#d4c87a",
-        frameColors: ["#e5da90", "#d4c87a", "#c3b664", "#d4c87a", "#e5da90"],
+        id: "titanium-jadegreen",
+        label: "Titanium Jade Green",
+        frame: "#7AA89A",
+        frameColors: ["#92BAAE", "#7AA89A", "#608E80", "#7AA89A", "#92BAAE"],
+        screen: "#000",
+      },
+      {
+        id: "titanium-jetblack",
+        label: "Titanium Jetblack",
+        frame: "#0D0D0F",
+        frameColors: ["#252528", "#0D0D0F", "#000000", "#0D0D0F", "#252528"],
         screen: "#000",
       },
     ],
   },
   {
-    id: "samsung-galaxy-tab-s9",
-    label: "Samsung Galaxy Tab S9",
-    width: 1600,
-    height: 2560,
-    screenInset: { top: 35, right: 35, bottom: 35, left: 35 },
-    cornerRadius: 40,
+    id: "samsung-galaxy-tab-s10-plus",
+    label: "Samsung Galaxy Tab S10+",
+    width: 1752,
+    height: 2800,
+    screenInset: { top: 30, right: 30, bottom: 30, left: 30 },
+    cornerRadius: 38,
     frameRadius: { outer: "3%/2%", inner: "2.5%/1.5%" },
     notchWidth: 0,
     notchHeight: 0,
     hasIsland: false,
     colors: [
+      {
+        id: "moonstone-gray",
+        label: "Moonstone Gray",
+        frame: "#5C636B",
+        frameColors: ["#737A82", "#5C636B", "#444A52", "#5C636B", "#737A82"],
+        screen: "#000",
+      },
+      {
+        id: "platinum-silver",
+        label: "Platinum Silver",
+        frame: "#D9D9DB",
+        frameColors: ["#EAEAEC", "#D9D9DB", "#BFBFC2", "#D9D9DB", "#EAEAEC"],
+        screen: "#000",
+      },
       {
         id: "graphite",
         label: "Graphite",
@@ -247,17 +301,90 @@ export const gradientPresets: GradientPreset[] = [
 
 export const exportSizes: ExportSize[] = [
   {
-    id: "6.7",
-    label: "6.7 inch (iPhone 13/12 Pro Max)",
-    width: 1284,
-    height: 2778,
+    id: "iphone-6.9",
+    label: 'iPhone 6.9" (1320×2868) — App Store required',
+    width: 1320,
+    height: 2868,
   },
   {
-    id: "6.5",
-    label: "6.5 inch (iPhone 11 Pro Max)",
-    width: 1242,
-    height: 2688,
+    id: "ipad-13",
+    label: 'iPad 13" (2064×2752) — App Store required',
+    width: 2064,
+    height: 2752,
   },
-  { id: "5.5", label: "5.5 inch (iPhone 8 Plus)", width: 1242, height: 2208 },
-  { id: "ipad", label: "12.9 inch (iPad Pro)", width: 2048, height: 2732 },
+  {
+    id: "mac",
+    label: "Mac (2880×1800) — App Store required",
+    width: 2880,
+    height: 1800,
+  },
+  {
+    id: "android-phone",
+    label: "Android Phone (1080×1920) — Google Play",
+    width: 1080,
+    height: 1920,
+  },
+  {
+    id: "android-tablet-10",
+    label: 'Android Tablet 10" (1600×2560) — Google Play',
+    width: 1600,
+    height: 2560,
+  },
 ];
+
+/**
+ * Maps each platform variant to its flagship device + required export size.
+ * Used by "Duplicate as platform" to spin up a sibling project pre-configured
+ * for the target app store.
+ */
+export const PLATFORMS: {
+  key: PlatformKey;
+  label: string;
+  deviceId: string;
+  exportSizeId: string;
+}[] = [
+  {
+    key: "ios-phone",
+    label: "iPhone",
+    deviceId: "iphone-17-pro-max",
+    exportSizeId: "iphone-6.9",
+  },
+  {
+    key: "ios-tablet",
+    label: "iPad",
+    deviceId: "ipad-pro-13",
+    exportSizeId: "ipad-13",
+  },
+  {
+    key: "macos",
+    label: "Mac",
+    deviceId: "macbook-pro-16",
+    exportSizeId: "mac",
+  },
+  {
+    key: "android-phone",
+    label: "Android Phone",
+    deviceId: "samsung-galaxy-s25-ultra",
+    exportSizeId: "android-phone",
+  },
+  {
+    key: "android-tablet",
+    label: "Android Tablet",
+    deviceId: "samsung-galaxy-tab-s10-plus",
+    exportSizeId: "android-tablet-10",
+  },
+];
+
+export const getPlatform = (key: PlatformKey) =>
+  PLATFORMS.find((p) => p.key === key) ?? PLATFORMS[0];
+
+/**
+ * Best-effort: infer which platform a project is targeting from its current
+ * device id. Used when a legacy (un-tagged) project gets cloned — we tag the
+ * source with the inferred platform so siblings render correctly in the
+ * grouped picker.
+ */
+export const inferPlatformFromDevice = (
+  deviceId: string,
+): PlatformKey | undefined =>
+  PLATFORMS.find((p) => p.deviceId === deviceId)?.key;

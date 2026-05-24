@@ -1,11 +1,12 @@
 {
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "default",
-  "description": "Default permissions for the AppShots window",
+  "description": "Default permissions for the Prestige window",
   "windows": ["main"],
   "permissions": [
     "core:default",
     "dialog:default",
+    "dialog:allow-open",
     "shell:default",
     "fs:allow-appdata-read-recursive",
     "fs:allow-appdata-write-recursive",
@@ -17,7 +18,8 @@
         { "path": "$APPDATA/projects/**" },
         { "path": "$APPDATA/snapshots" },
         { "path": "$APPDATA/snapshots/**" },
-        { "path": "$APPDATA/meta.json" }
+        { "path": "$APPDATA/meta.json" },
+        { "path": "$APPDATA/settings.json" }
       ]
     }
   ]

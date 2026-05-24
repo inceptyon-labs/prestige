@@ -921,19 +921,52 @@ export const exportScreenshots = async ({
     // Account for padding (4px * 2) in preview to match text wrapping
     const paddingX = 8 * scaleX;
 
-    // Draw background
-    if (screenshot.backgroundMode === "gradient") {
-      const preset =
-        gradientPresets.find((p) => p.id === screenshot.gradientPresetId) ??
-        gradientPresets[0];
-      const gradient = ctx.createLinearGradient(0, 0, 0, canvas.height);
-      gradient.addColorStop(0, preset.from);
-      gradient.addColorStop(1, preset.to);
-      ctx.fillStyle = gradient;
-    } else {
-      ctx.fillStyle = screenshot.backgroundColor;
-    }
+    // Draw background. Solid colour first so image mode has a fallback if
+    // the dataURL fails to load and gradient mode has nothing to leak through.
+    ctx.fillStyle = screenshot.backgroundColor;
     ctx.fillRect(0, 0, canvas.width, canvas.height);
+    if (screenshot.backgroundMode === "gradient") {
+      const gradient = ctx.createLinearGradient(0, 0, 0, canvas.height);
+      if (screenshot.customGradient) {
+        gradient.addColorStop(0, screenshot.customGradient.from);
+        gradient.addColorStop(1, screenshot.customGradient.to);
+      } else {
+        const preset =
+          gradientPresets.find((p) => p.id === screenshot.gradientPresetId) ??
+          gradientPresets[0];
+        gradient.addColorStop(0, preset.from);
+        gradient.addColorStop(1, preset.to);
+      }
+      ctx.fillStyle = gradient;
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+    } else if (
+      screenshot.backgroundMode === "image" &&
+      screenshot.backgroundImageSrc
+    ) {
+      const bgImg = new Image();
+      bgImg.crossOrigin = "anonymous";
+      bgImg.src = screenshot.backgroundImageSrc;
+      await new Promise<void>((resolve) => {
+        bgImg.onload = () => {
+          const opacity = screenshot.backgroundImageOpacity ?? 1;
+          ctx.save();
+          ctx.globalAlpha = opacity;
+          // Cover: scale so the shorter axis fills, center, crop overflow.
+          const scale = Math.max(
+            canvas.width / bgImg.width,
+            canvas.height / bgImg.height,
+          );
+          const drawW = bgImg.width * scale;
+          const drawH = bgImg.height * scale;
+          const dx = (canvas.width - drawW) / 2;
+          const dy = (canvas.height - drawH) / 2;
+          ctx.drawImage(bgImg, dx, dy, drawW, drawH);
+          ctx.restore();
+          resolve();
+        };
+        bgImg.onerror = () => resolve();
+      });
+    }
 
     // Helper to draw overlay images
     const drawOverlayImages = async (layer: "behind" | "front") => {
@@ -993,9 +1026,12 @@ export const exportScreenshots = async ({
     // Draw overlay images behind device
     await drawOverlayImages("behind");
 
-    const renderableDevices = getRenderableDevicesForScreenshot(screenshots, i);
-    for (const { device, localX } of renderableDevices) {
-      await drawDeviceInstance(ctx, canvas, device, scaleX, localX);
+    // Hero panels render text + bg image only — skip device chrome.
+    if (!screenshot.isHero) {
+      const renderableDevices = getRenderableDevicesForScreenshot(screenshots, i);
+      for (const { device, localX } of renderableDevices) {
+        await drawDeviceInstance(ctx, canvas, device, scaleX, localX);
+      }
     }
 
     const fontFamily = `'${screenshot.fontFamily}', sans-serif`;

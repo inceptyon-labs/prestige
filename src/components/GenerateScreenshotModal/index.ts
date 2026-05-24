@@ -1,0 +1,1 @@
+export { GenerateScreenshotModal } from "./GenerateScreenshotModal";

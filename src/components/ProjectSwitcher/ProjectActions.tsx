@@ -4,8 +4,8 @@
  * Compact action row directly below the project switcher offering:
  *   - Save snapshot (named, frozen version of the current project)
  *   - Restore / delete existing snapshots
- *   - Export current project to .appshots.json
- *   - Import a .appshots.json file
+ *   - Export current project to .prestige.json
+ *   - Import a .prestige.json file
  *
  * Snapshots live in IndexedDB alongside projects and survive reloads / browser
  * restarts on the same machine. Exports give the user a portable backup that

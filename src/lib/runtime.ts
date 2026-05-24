@@ -1,7 +1,7 @@
 /**
  * Runtime detection.
  *
- * AppShots ships in two flavours from the same React code: a web build
+ * Prestige ships in two flavours from the same React code: a web build
  * (browser, IndexedDB persistence) and a Tauri desktop build (native window,
  * filesystem persistence). Anything that needs to branch — storage adapter,
  * file dialogs, AI subprocess access — should use these helpers instead of

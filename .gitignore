@@ -12,3 +12,13 @@ count.txt
 # Tauri
 src-tauri/target
 src-tauri/gen/schemas
+
+# Added by repo-ready
+/target
+.env.local
+.env.*.local
+*.log
+.idea
+.vscode/*
+!.vscode/extensions.json
+!.vscode/settings.json

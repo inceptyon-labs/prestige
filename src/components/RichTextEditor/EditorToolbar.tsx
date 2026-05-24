@@ -4,17 +4,7 @@
  * Complete toolbar with all formatting controls.
  */
 
-import {
-  Bold,
-  Italic,
-  Underline,
-  AlignLeft,
-  AlignCenter,
-  AlignRight,
-  Highlighter,
-  Palette,
-  Sparkles,
-} from "lucide-react";
+import { Bold, Italic, Underline, Highlighter, Palette } from "lucide-react";
 import type { ActiveStyles } from "./types";
 import { ICON_SIZE, STYLES } from "./constants";
 import { ToolbarButton } from "./ToolbarButton";
@@ -112,44 +102,6 @@ export const EditorToolbar = ({
         icon={<Highlighter size={ICON_SIZE} />}
       />
 
-      <ToolbarSeparator />
-
-      {/* Alignment */}
-      <ToolbarButton
-        onClick={() => onCommand("justifyLeft")}
-        active={activeStyles.alignLeft}
-        tooltip="Align Left"
-        onMouseDown={preventFocus}
-      >
-        <AlignLeft size={ICON_SIZE} />
-      </ToolbarButton>
-      <ToolbarButton
-        onClick={() => onCommand("justifyCenter")}
-        active={activeStyles.alignCenter}
-        tooltip="Align Center"
-        onMouseDown={preventFocus}
-      >
-        <AlignCenter size={ICON_SIZE} />
-      </ToolbarButton>
-      <ToolbarButton
-        onClick={() => onCommand("justifyRight")}
-        active={activeStyles.alignRight}
-        tooltip="Align Right"
-        onMouseDown={preventFocus}
-      >
-        <AlignRight size={ICON_SIZE} />
-      </ToolbarButton>
-
-      <ToolbarSeparator />
-
-      {/* AI Assist (placeholder) */}
-      <ToolbarButton
-        onClick={() => {}}
-        tooltip="AI Assist (Coming Soon)"
-        onMouseDown={preventFocus}
-      >
-        <Sparkles size={ICON_SIZE} />
-      </ToolbarButton>
     </div>
   );
 };

@@ -1,7 +1,7 @@
 /**
  * Storage backend abstraction.
  *
- * AppShots persists projects + snapshots through one of two implementations:
+ * Prestige persists projects + snapshots through one of two implementations:
  *
  *   - IndexedDBBackend (web build)   — uses idb
  *   - FilesystemBackend (Tauri build) — writes JSON files under $APPDATA

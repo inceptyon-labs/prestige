@@ -11,9 +11,6 @@ export interface ActiveStyles {
   bold: boolean;
   italic: boolean;
   underline: boolean;
-  alignLeft: boolean;
-  alignCenter: boolean;
-  alignRight: boolean;
 }
 
 /**

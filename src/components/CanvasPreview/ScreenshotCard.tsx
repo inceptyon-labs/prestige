@@ -11,6 +11,7 @@ import { RemoveButton } from "./RemoveButton";
 import { OverlayImage } from "./OverlayImage";
 import { TextElement } from "./TextElement";
 import { DeviceContainer } from "./DeviceContainer";
+import { SnapGuideOverlay } from "./SnapGuideOverlay";
 import { isElementSelected } from "./utils";
 import { Z_INDEX } from "./constants";
 
@@ -50,6 +51,8 @@ interface ScreenshotCardProps {
   ) => void;
   /** Handler for element mouse up */
   onElementMouseUp: () => void;
+  /** Active alignment guides for this card (percent values). */
+  guides?: { x: number[]; y: number[] };
 }
 
 /**
@@ -76,6 +79,7 @@ export const ScreenshotCard = ({
   onDeselect,
   onElementMouseDown,
   onElementMouseUp,
+  guides,
 }: ScreenshotCardProps) => {
   // Split overlay images by layer
   const behindImages = screenshot.overlayImages.filter(
@@ -84,6 +88,9 @@ export const ScreenshotCard = ({
   const frontImages = screenshot.overlayImages.filter(
     (img) => img.layer !== "behind",
   );
+
+  // Hero panels render text + bg image only; the device chrome is hidden.
+  const showDevices = !screenshot.isHero;
 
   // Handle background click to deselect
   const handleBackgroundMouseDown = (e: React.MouseEvent) => {
@@ -173,25 +180,27 @@ export const ScreenshotCard = ({
           }
         />
 
-        {/* Devices, including visible overflow from neighboring screenshots */}
-        {renderableDevices.map(({ device, localX, ownerScreenshotId }, index) => (
-          <DeviceContainer
-            key={`${ownerScreenshotId}-${device.id}`}
-            device={device}
-            renderX={localX}
-            zIndex={Z_INDEX.device + index}
-            isSelected={isElementSelected(
-              selectedElement,
-              "device",
-              ownerScreenshotId,
-              device.id,
-            )}
-            isInteractive
-            onMouseDown={(e) =>
-              onElementMouseDown(e, "device", ownerScreenshotId, device.id)
-            }
-          />
-        ))}
+        {/* Devices, including visible overflow from neighboring screenshots.
+            Hero panels skip this layer entirely. */}
+        {showDevices &&
+          renderableDevices.map(({ device, localX, ownerScreenshotId }, index) => (
+            <DeviceContainer
+              key={`${ownerScreenshotId}-${device.id}`}
+              device={device}
+              renderX={localX}
+              zIndex={Z_INDEX.device + index}
+              isSelected={isElementSelected(
+                selectedElement,
+                "device",
+                ownerScreenshotId,
+                device.id,
+              )}
+              isInteractive
+              onMouseDown={(e) =>
+                onElementMouseDown(e, "device", ownerScreenshotId, device.id)
+              }
+            />
+          ))}
 
         {/* Overlay images in front of device */}
         {frontImages.map((image, index) => (
@@ -212,6 +221,11 @@ export const ScreenshotCard = ({
           />
         ))}
       </div>
+
+      {/* Alignment guides — populated while a drag is in progress. */}
+      {guides && (
+        <SnapGuideOverlay xGuides={guides.x} yGuides={guides.y} />
+      )}
     </div>
   );
 };

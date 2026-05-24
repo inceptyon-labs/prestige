@@ -4,11 +4,15 @@
  * Device layout and sizing controls including 2D/3D style toggle.
  */
 
+import { AlertCircle, Check, X } from "lucide-react";
 import type { DeviceInstance, Screenshot, ShadowConfig } from "../../types";
 import { SidebarSection } from "./SidebarSection";
 import { RangeSlider } from "./RangeSlider";
 import { ShadowControls } from "./ShadowControls";
 import { SLIDER_RANGES, STYLES } from "./constants";
+import { SuggestButton } from "../AISuggest";
+import { useModelLabel } from "../../lib/ai/use-model-label";
+import { useEditor } from "../../context/EditorContext";
 
 interface LayoutSectionProps {
   /** Active device data */
@@ -46,6 +50,16 @@ export const LayoutSection = ({
   onHeadlineSizeChange,
   onSubheadlineSizeChange,
 }: LayoutSectionProps) => {
+  const {
+    isGeneratingLayout,
+    layoutSuggestion,
+    layoutError,
+    generateLayoutSuggestion,
+    applyLayoutSuggestion,
+    dismissLayoutSuggestion,
+  } = useEditor();
+  const modelLabel = useModelLabel("default");
+
   const handleShadowUpdate = (updates: Partial<ShadowConfig>) => {
     onUpdateDevice({
       shadow: { ...device.shadow, ...updates },
@@ -57,6 +71,47 @@ export const LayoutSection = ({
   return (
     <SidebarSection title="Layout">
       <div className="space-y-3">
+        <div className="flex items-center justify-between">
+          <span className="text-[10px] uppercase tracking-wide text-zinc-500">
+            Position &amp; sizing
+          </span>
+          <SuggestButton
+            onClick={() => void generateLayoutSuggestion()}
+            isLoading={isGeneratingLayout}
+            label="Suggest layout"
+            caption={modelLabel}
+          />
+        </div>
+
+        {layoutError && (
+          <div className="flex items-start gap-1.5 text-[11px] text-red-400 bg-red-500/5 border border-red-500/20 rounded px-2 py-1.5">
+            <AlertCircle className="w-3 h-3 mt-0.5 flex-shrink-0" />
+            <span className="whitespace-pre-wrap break-words flex-1">
+              {layoutError}
+            </span>
+            <button
+              type="button"
+              onClick={dismissLayoutSuggestion}
+              className="text-zinc-500 hover:text-white"
+            >
+              <X className="w-3 h-3" />
+            </button>
+          </div>
+        )}
+
+        {layoutSuggestion && (
+          <button
+            type="button"
+            onClick={applyLayoutSuggestion}
+            className="group w-full flex items-center justify-between gap-2 text-left bg-zinc-900 hover:bg-violet-600/20 hover:border-violet-500 border border-zinc-700 rounded px-2.5 py-1.5 text-sm text-zinc-200 transition-colors"
+          >
+            <span>
+              Apply <strong>{layoutSuggestion.replace(/-/g, " ")}</strong>
+            </span>
+            <Check className="w-3.5 h-3.5 text-zinc-600 group-hover:text-violet-400" />
+          </button>
+        )}
+
         {/* Device Style Toggle */}
         <div>
           <label className="block text-xs text-gray-400 mb-2">

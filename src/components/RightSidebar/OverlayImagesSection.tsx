@@ -4,13 +4,15 @@
  * Overlay images management section.
  */
 
-import type { RefObject } from "react";
+import { useState, type RefObject } from "react";
+import { Sparkles } from "lucide-react";
 import type { Screenshot, ShadowConfig } from "../../types";
 import { SidebarSection } from "./SidebarSection";
 import { OverlayImageItem } from "./OverlayImageItem";
 import { OverlayImageProperties } from "./OverlayImageProperties";
 import { STYLES } from "./constants";
 import type { SelectedElement } from "./types";
+import { GenerateImageModal } from "../GenerateImageModal";
 
 interface OverlayImagesSectionProps {
   /** Active screenshot data */
@@ -73,6 +75,8 @@ export const OverlayImagesSection = ({
     e.target.value = "";
   };
 
+  const [isAIModalOpen, setIsAIModalOpen] = useState(false);
+
   return (
     <SidebarSection title="Overlay Images">
       <div className="space-y-2">
@@ -83,12 +87,22 @@ export const OverlayImagesSection = ({
           onChange={handleFileChange}
           className="hidden"
         />
-        <button
-          onClick={() => overlayImageInputRef.current?.click()}
-          className={STYLES.uploadButton}
-        >
-          + Add Image
-        </button>
+        <div className="flex gap-2">
+          <button
+            onClick={() => overlayImageInputRef.current?.click()}
+            className={`${STYLES.uploadButton} flex-1`}
+          >
+            + Add Image
+          </button>
+          <button
+            onClick={() => setIsAIModalOpen(true)}
+            title="Generate an overlay image with AI"
+            className="px-3 inline-flex items-center justify-center gap-1.5 bg-violet-600 hover:bg-violet-500 text-white text-sm py-2 rounded-md transition-colors"
+          >
+            <Sparkles className="w-3.5 h-3.5" />
+            Generate
+          </button>
+        </div>
 
         {screenshot.overlayImages.length > 0 && (
           <div className="space-y-2 mt-3">
@@ -145,6 +159,11 @@ export const OverlayImagesSection = ({
           </div>
         )}
       </div>
+      <GenerateImageModal
+        isOpen={isAIModalOpen}
+        target="overlay"
+        onClose={() => setIsAIModalOpen(false)}
+      />
     </SidebarSection>
   );
 };

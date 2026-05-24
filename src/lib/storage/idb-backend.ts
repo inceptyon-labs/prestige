@@ -8,12 +8,12 @@ import { openDB, type DBSchema, type IDBPDatabase } from "idb";
 import type { Project } from "../../types";
 import type { Snapshot, StorageBackend } from "./backend";
 
-const DB_NAME = "appshots";
+const DB_NAME = "prestige";
 const DB_VERSION = 1;
 const LEGACY_LOCALSTORAGE_KEY = "app-screenshot-editor-state";
 const MIGRATION_FLAG = "migrated:localstorage-v1";
 
-interface AppshotsSchema extends DBSchema {
+interface PrestigeSchema extends DBSchema {
   projects: {
     key: string;
     value: Project;
@@ -29,11 +29,11 @@ interface AppshotsSchema extends DBSchema {
   };
 }
 
-let dbPromise: Promise<IDBPDatabase<AppshotsSchema>> | null = null;
+let dbPromise: Promise<IDBPDatabase<PrestigeSchema>> | null = null;
 
-const getDB = (): Promise<IDBPDatabase<AppshotsSchema>> => {
+const getDB = (): Promise<IDBPDatabase<PrestigeSchema>> => {
   if (!dbPromise) {
-    dbPromise = openDB<AppshotsSchema>(DB_NAME, DB_VERSION, {
+    dbPromise = openDB<PrestigeSchema>(DB_NAME, DB_VERSION, {
       upgrade(db) {
         if (!db.objectStoreNames.contains("projects")) {
           db.createObjectStore("projects", { keyPath: "id" });

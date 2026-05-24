@@ -20,6 +20,8 @@ import { LayoutSection } from "./LayoutSection";
 import { ContentSection } from "./ContentSection";
 import { AppearanceSection } from "./AppearanceSection";
 import { OverlayImagesSection } from "./OverlayImagesSection";
+import { ResizeHandle } from "../ResizeHandle";
+import { useResizableWidth } from "../../lib/useResizableWidth";
 import { STYLES } from "./constants";
 
 /**
@@ -60,51 +62,79 @@ export const RightSidebar = () => {
     sendImageBackward,
   } = useEditor();
 
+  const { width, isResizing, startResize } = useResizableWidth({
+    storageKey: "prestige.rightSidebarWidth",
+    defaultWidth: 384, // matches the original w-96
+    min: 300,
+    max: 640,
+    edge: "left",
+  });
+
+  // Hero panels have no devices; hide every device-specific section in
+  // the sidebar so we don't try to dereference an undefined activeDevice.
+  // LayoutSection still has useful sliders (headline/subheadline sizing)
+  // even when there's no device, so we pass undefined and let it skip
+  // device-only controls internally (see LayoutSection).
+  const hasDevice = !activeScreenshot.isHero && activeDevice;
+
   return (
-    <aside className={STYLES.sidebar}>
-      <div className={STYLES.content}>
-        <DeviceInstancesSection
-          screenshot={activeScreenshot}
-          onAddDevice={addDevice}
-          onSelectDevice={selectDevice}
-          onRemoveDevice={removeDevice}
-          onBringForward={bringDeviceForward}
-          onSendBackward={sendDeviceBackward}
-        />
+    <aside
+      className="shrink-0 border-l border-white/10 bg-[#141414] relative"
+      style={{ width }}
+    >
+      <ResizeHandle side="left" onMouseDown={startResize} isActive={isResizing} />
+      <div className="h-full overflow-y-auto">
+        <div className={STYLES.content}>
+        {hasDevice && (
+          <DeviceInstancesSection
+            screenshot={activeScreenshot}
+            onAddDevice={addDevice}
+            onSelectDevice={selectDevice}
+            onRemoveDevice={removeDevice}
+            onBringForward={bringDeviceForward}
+            onSendBackward={sendDeviceBackward}
+          />
+        )}
 
-        <ScreenshotImageSection
-          device={activeDevice}
-          fileInputRef={fileInputRef}
-          onFileUpload={handleFileUpload}
-        />
+        {hasDevice && (
+          <ScreenshotImageSection
+            device={activeDevice}
+            fileInputRef={fileInputRef}
+            onFileUpload={handleFileUpload}
+          />
+        )}
 
-        <PositionPresets
-          device={activeDevice}
-          onUpdateDevice={(updates) =>
-            updateActiveScreenshot({
-              devices: activeScreenshot.devices.map((device) =>
-                device.id === activeDevice.id ? { ...device, ...updates } : device,
-              ),
-            })
-          }
-        />
+        {hasDevice && (
+          <PositionPresets
+            device={activeDevice}
+            onUpdateDevice={(updates) =>
+              updateActiveScreenshot({
+                devices: activeScreenshot.devices.map((device) =>
+                  device.id === activeDevice.id ? { ...device, ...updates } : device,
+                ),
+              })
+            }
+          />
+        )}
 
-        <LayoutSection
-          device={activeDevice}
-          screenshot={activeScreenshot}
-          headlineFontSize={headlineFontSize}
-          subheadlineFontSize={subheadlineFontSize}
-          onUpdateDevice={(updates) =>
-            updateActiveScreenshot({
-              devices: activeScreenshot.devices.map((device) =>
-                device.id === activeDevice.id ? { ...device, ...updates } : device,
-              ),
-            })
-          }
-          onUpdateScreenshot={updateActiveScreenshot}
-          onHeadlineSizeChange={setHeadlineFontSize}
-          onSubheadlineSizeChange={setSubheadlineFontSize}
-        />
+        {hasDevice && (
+          <LayoutSection
+            device={activeDevice}
+            screenshot={activeScreenshot}
+            headlineFontSize={headlineFontSize}
+            subheadlineFontSize={subheadlineFontSize}
+            onUpdateDevice={(updates) =>
+              updateActiveScreenshot({
+                devices: activeScreenshot.devices.map((device) =>
+                  device.id === activeDevice.id ? { ...device, ...updates } : device,
+                ),
+              })
+            }
+            onUpdateScreenshot={updateActiveScreenshot}
+            onHeadlineSizeChange={setHeadlineFontSize}
+            onSubheadlineSizeChange={setSubheadlineFontSize}
+          />
+        )}
 
         <ContentSection
           screenshot={activeScreenshot}
@@ -132,6 +162,7 @@ export const RightSidebar = () => {
           onBringForward={bringImageForward}
           onSendBackward={sendImageBackward}
         />
+        </div>
       </div>
     </aside>
   );
