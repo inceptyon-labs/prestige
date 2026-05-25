@@ -59,7 +59,7 @@ const downloadAsZip = async (files: { name: string; data: string }[]) => {
   const url = URL.createObjectURL(content);
   
   const link = document.createElement("a");
-  link.download = "appstore-screenshots.zip";
+  link.download = "prestige-screenshots.zip";
   link.href = url;
   link.click();
   
@@ -907,7 +907,7 @@ export const exportScreenshots = async ({
 
   for (let i = 0; i < screenshots.length; i++) {
     const screenshot = screenshots[i];
-    const filename = `appstore-screenshot-${i + 1}.png`;
+    const filename = `prestige-screenshot-${i + 1}.png`;
 
     const canvas = document.createElement("canvas");
     canvas.width = exportSize.width;
