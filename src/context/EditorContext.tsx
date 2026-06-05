@@ -55,6 +55,8 @@ import {
 } from "../lib/ai/image/compose-prompt";
 import { enrichImagePrompt } from "../lib/ai/features/enrich-image-prompt";
 import { generateHeroCard } from "../lib/ai/features/hero-card";
+import { translatePanels } from "../lib/ai/features/translate";
+import { normalizeRichTextHighlights } from "../lib/rich-text-highlight";
 import type {
   ImageModelId,
   ImageResolution,
@@ -68,6 +70,7 @@ import { POSITION_PRESET_SETTINGS } from "../components/RightSidebar/position-pr
 import {
   devices,
   exportSizes,
+  getLocale,
   getPlatform,
   gradientPresets,
   inferPlatformFromDevice,
@@ -115,6 +118,13 @@ interface EditorContextType {
   deleteProject: (id: string) => Promise<void>;
   switchProject: (id: string) => void;
   duplicateProjectAsPlatform: (sourceId: string, platform: PlatformKey) => void;
+  duplicateProjectAsLocale: (
+    sourceId: string,
+    localeKey: string,
+  ) => Promise<void>;
+  localizeError: string | null;
+  /** Source project id currently being localized, or null when idle. */
+  localizingProjectId: string | null;
 
   // State
   isFontPickerOpen: boolean;
@@ -498,6 +508,11 @@ export const EditorProvider = ({ children }: { children: ReactNode }) => {
 
   const [isGeneratingHero, setIsGeneratingHero] = useState(false);
   const [generateHeroError, setGenerateHeroError] = useState<string | null>(null);
+
+  const [localizingProjectId, setLocalizingProjectId] = useState<string | null>(
+    null,
+  );
+  const [localizeError, setLocalizeError] = useState<string | null>(null);
 
   const [isGeneratingAIImage, setIsGeneratingAIImage] = useState(false);
   const [generateAIImageError, setGenerateAIImageError] = useState<string | null>(
@@ -2305,9 +2320,183 @@ export const EditorProvider = ({ children }: { children: ReactNode }) => {
     applyProjectToState(newProject);
   };
 
+  /**
+   * Clone a project into a localized sibling (same group), keeping device,
+   * color, screens, export size, and layout — only the marketing copy is
+   * AI-translated into the target language. The source (original-language)
+   * project is left untouched.
+   */
+  const duplicateProjectAsLocale = async (
+    sourceId: string,
+    localeKey: string,
+  ) => {
+    // Prevent concurrent localizations
+    if (localizingProjectId) {
+      setLocalizeError("A localization is already in progress");
+      return;
+    }
+
+    const source = projects.find((p) => p.id === sourceId);
+    if (!source) return;
+    const locale = getLocale(localeKey);
+    if (!locale) return;
+
+    setLocalizeError(null);
+    setLocalizingProjectId(sourceId);
+
+    try {
+      // Promote standalone source into a group on first duplication, so both
+      // projects render under the same parent in the picker.
+      const groupId = source.groupId ?? generateId();
+
+      // Check if a sibling with this locale/platform combo already exists
+      const potentialGroupId = source.groupId ?? groupId;
+      const sourcePlatform =
+        source.platform ?? inferPlatformFromDevice(source.selectedDeviceId);
+      const existingSibling = projects.find((p) =>
+        p.groupId === potentialGroupId &&
+        p.platform === sourcePlatform &&
+        p.locale === localeKey
+      );
+      if (existingSibling) {
+        setLocalizeError(`${locale.label} variant for this platform already exists`);
+        return;
+      }
+      const groupName =
+        source.groupName ??
+        source.name.replace(/\s+—\s+.+$/, "").trim() ??
+        source.name;
+
+      // Translate every panel's copy in one AI call.
+      const providerId = source.ai?.provider ?? "claude";
+      const provider = getProvider(providerId);
+      const result = await translatePanels({
+        provider,
+        model: resolveModelForTier(providerId, "default"),
+        targetLanguage: locale.label,
+        panels: source.screenshots.map((s) => ({
+          id: s.id,
+          headline: s.headline,
+          subheadline: s.subheadline,
+        })),
+        brand: {
+          brandName: source.ai?.brandName,
+          audience: source.ai?.audience,
+          voice: source.ai?.voice,
+          keyFeature: source.ai?.keyFeature,
+          // TODO: Brand folder is only included for the active project. Localizing
+          // a non-active project skips folder context, producing inconsistent translations.
+          // Consider loading folder context for source project before awaiting translate.
+          folder:
+            source.id === activeProjectId ? brandFolderContents : null,
+        },
+      });
+
+      const translatedById = new Map(
+        result.panels.map((p) => [p.id, p]),
+      );
+
+      // Validate that the AI produced translations for all panels. If not, warn
+      // and abort to prevent silently creating an untranslated project.
+      const missingPanels = source.screenshots.filter(
+        (s) => !translatedById.has(s.id),
+      );
+      if (missingPanels.length > 0) {
+        setLocalizeError(
+          `Translation incomplete: ${missingPanels.length}/${source.screenshots.length} panels failed. Please try again.`,
+        );
+        return;
+      }
+
+      // After awaiting the AI call, re-check that the source project still exists.
+      // User may have deleted it while translation was running.
+      let currentSource = projects.find((p) => p.id === sourceId);
+      if (!currentSource) {
+        setLocalizeError("Source project was deleted");
+        return;
+      }
+
+      // Clone screenshots, keeping device/color/screen image (the app screens
+      // are identical across locales — only the copy changes). Fall back to the
+      // original copy for any panel the AI dropped.
+      // Build a mapping of old device IDs to new ones so we preserve activeDeviceId.
+      const clonedScreenshots = currentSource.screenshots.map((screenshot) => {
+        const translated = translatedById.get(screenshot.id);
+        const oldToNewDeviceId = new Map<string, string>();
+        const clonedDevices = screenshot.devices.map((d) => {
+          const newId = generateId();
+          oldToNewDeviceId.set(d.id, newId);
+          return { ...d, id: newId };
+        });
+        return {
+          ...screenshot,
+          id: generateId(),
+          // Sanitize translated HTML to prevent injection (preserves rich-text markup)
+          headline: translated
+            ? normalizeRichTextHighlights(translated.headline)
+            : screenshot.headline,
+          subheadline: translated
+            ? normalizeRichTextHighlights(translated.subheadline)
+            : screenshot.subheadline,
+          devices: clonedDevices,
+          activeDeviceId: oldToNewDeviceId.get(screenshot.activeDeviceId) ?? clonedDevices[0]?.id ?? screenshot.activeDeviceId,
+          overlayImages: screenshot.overlayImages.map((img) => ({
+            ...img,
+            id: generateId(),
+          })),
+        };
+      });
+
+      const platformLabel = sourcePlatform
+        ? getPlatform(sourcePlatform).label
+        : null;
+      const newProject: Project = {
+        ...currentSource,
+        id: generateId(),
+        name: `${groupName} — ${
+          platformLabel ? `${platformLabel} — ` : ""
+        }${locale.label}`,
+        groupId,
+        groupName,
+        platform: sourcePlatform,
+        locale: localeKey as import("../constants").LocaleKey,
+        screenshots: clonedScreenshots,
+        activeScreenshotId: clonedScreenshots[0].id,
+        createdAt: Date.now(),
+        updatedAt: Date.now(),
+      };
+
+      setProjects((prev) => {
+        // Re-check the source exists in current state (it may have been deleted)
+        if (!prev.find((p) => p.id === sourceId)) {
+          setLocalizeError("Source project was deleted");
+          return prev;
+        }
+        const tagged = prev.map((p) =>
+          p.id === sourceId
+            ? {
+                ...p,
+                groupId,
+                groupName,
+                platform: p.platform ?? sourcePlatform,
+              }
+            : p,
+        );
+        return [...tagged, newProject];
+      });
+      applyProjectToState(newProject);
+    } catch (err) {
+      setLocalizeError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setLocalizingProjectId(null);
+    }
+  };
+
   const deleteProject = async (id: string) => {
     // Don't delete the last project
     if (projects.length <= 1) return;
+    // Don't allow deletion while this project is being localized
+    if (localizingProjectId === id) return;
 
     // CRITICAL: Cancel any pending auto-save before deleting, so a queued
     // `saveEditorState` doesn't resurrect the deleted project. Then await the
@@ -2946,6 +3135,9 @@ export const EditorProvider = ({ children }: { children: ReactNode }) => {
         deleteProject,
         switchProject,
         duplicateProjectAsPlatform,
+        duplicateProjectAsLocale,
+        localizeError,
+        localizingProjectId,
 
         isFontPickerOpen,
         setIsFontPickerOpen,

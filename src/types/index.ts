@@ -146,7 +146,8 @@ export type PlatformKey =
   | "ios-tablet"
   | "macos"
   | "android-phone"
-  | "android-tablet";
+  | "android-tablet"
+  | "android-tablet-7";
 
 /**
  * Project type - groups screenshots together
@@ -188,6 +189,12 @@ export type Project = {
   groupName?: string;
   /** Which platform this variant targets. */
   platform?: PlatformKey;
+  /**
+   * Target locale key (from LOCALES). Absent = source / original language.
+   * Set by "Duplicate as language", which clones a project and AI-translates
+   * its copy. Locale variants are siblings (same `groupId`) of their source.
+   */
+  locale?: import("../constants").LocaleKey;
 };
 
 /**

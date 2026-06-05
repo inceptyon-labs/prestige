@@ -288,6 +288,48 @@ export const devices: DeviceSpec[] = [
       },
     ],
   },
+  {
+    id: "samsung-galaxy-tab-a9",
+    label: "Samsung Galaxy Tab A9",
+    width: 800,
+    height: 1340,
+    screenInset: { top: 22, right: 22, bottom: 22, left: 22 },
+    cornerRadius: 32,
+    frameRadius: { outer: "4%/2.5%", inner: "3.5%/2%" },
+    notchWidth: 0,
+    notchHeight: 0,
+    hasIsland: false,
+    colors: [
+      {
+        id: "graphite",
+        label: "Graphite",
+        frame: "#3c3c3c",
+        frameColors: ["#4f4f4f", "#3c3c3c", "#292929", "#3c3c3c", "#4f4f4f"],
+        screen: "#000",
+      },
+      {
+        id: "silver",
+        label: "Silver",
+        frame: "#C8C8CA",
+        frameColors: ["#DADADC", "#C8C8CA", "#B0B0B2", "#C8C8CA", "#DADADC"],
+        screen: "#000",
+      },
+      {
+        id: "navy",
+        label: "Navy",
+        frame: "#1B2838",
+        frameColors: ["#2A3A4E", "#1B2838", "#0F1B28", "#1B2838", "#2A3A4E"],
+        screen: "#000",
+      },
+      {
+        id: "light-blue",
+        label: "Light Blue",
+        frame: "#A3C4D9",
+        frameColors: ["#B8D4E6", "#A3C4D9", "#8AB2C9", "#A3C4D9", "#B8D4E6"],
+        screen: "#000",
+      },
+    ],
+  },
 ];
 
 export const gradientPresets: GradientPreset[] = [
@@ -322,6 +364,12 @@ export const exportSizes: ExportSize[] = [
     id: "android-phone",
     label: "Android Phone (1080×1920) — Google Play",
     width: 1080,
+    height: 1920,
+  },
+  {
+    id: "android-tablet-7",
+    label: 'Android Tablet 7" (1200×1920) — Google Play',
+    width: 1200,
     height: 1920,
   },
   {
@@ -368,8 +416,14 @@ export const PLATFORMS: {
     exportSizeId: "android-phone",
   },
   {
+    key: "android-tablet-7",
+    label: "Android Tablet 7\"",
+    deviceId: "samsung-galaxy-tab-a9",
+    exportSizeId: "android-tablet-7",
+  },
+  {
     key: "android-tablet",
-    label: "Android Tablet",
+    label: "Android Tablet 10\"",
     deviceId: "samsung-galaxy-tab-s10-plus",
     exportSizeId: "android-tablet-10",
   },
@@ -377,6 +431,33 @@ export const PLATFORMS: {
 
 export const getPlatform = (key: PlatformKey) =>
   PLATFORMS.find((p) => p.key === key) ?? PLATFORMS[0];
+
+/**
+ * Preset App Store / Play Store locales offered by "Duplicate as language".
+ * `key` doubles as the stored locale id and the App Store locale code; `label`
+ * is the English display name shown in the picker.
+ */
+export const LOCALES = [
+  { key: "es-ES", label: "Spanish" },
+  { key: "fr-FR", label: "French" },
+  { key: "de-DE", label: "German" },
+  { key: "it-IT", label: "Italian" },
+  { key: "pt-BR", label: "Portuguese (Brazil)" },
+  { key: "ja", label: "Japanese" },
+  { key: "ko", label: "Korean" },
+  { key: "zh-Hans", label: "Chinese (Simplified)" },
+  { key: "zh-Hant", label: "Chinese (Traditional)" },
+  { key: "nl-NL", label: "Dutch" },
+  { key: "ru", label: "Russian" },
+  { key: "tr", label: "Turkish" },
+  { key: "ar-SA", label: "Arabic" },
+  { key: "hi", label: "Hindi" },
+] as const;
+
+export type LocaleKey = (typeof LOCALES)[number]["key"];
+
+export const getLocale = (key: string | LocaleKey) =>
+  LOCALES.find((l) => l.key === key);
 
 /**
  * Best-effort: infer which platform a project is targeting from its current

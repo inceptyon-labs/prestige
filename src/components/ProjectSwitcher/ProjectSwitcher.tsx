@@ -8,6 +8,8 @@
  * - Rename existing projects
  * - Delete projects
  * - Duplicate a project as a new platform variant (iPhone → iPad/Mac/Android/etc.)
+ * - Duplicate a project as a localized variant (English → Spanish/French/etc.),
+ *   AI-translating its copy
  */
 
 import { useState, useRef, useEffect, useMemo, useLayoutEffect } from "react";
@@ -22,9 +24,11 @@ import {
   Check,
   X,
   Layers,
+  Languages,
+  Loader2,
 } from "lucide-react";
 import { useEditor } from "../../context/EditorContext";
-import { PLATFORMS } from "../../constants";
+import { PLATFORMS, LOCALES, getLocale } from "../../constants";
 import type { PlatformKey, Project } from "../../types";
 
 type ProjectRowProps = {
@@ -35,6 +39,8 @@ type ProjectRowProps = {
   onRename: (name: string) => void;
   onDelete: () => Promise<void>;
   onDuplicateAsPlatform: (platform: PlatformKey) => void;
+  onDuplicateAsLocale: (localeKey: string) => void;
+  isLocalizing: boolean;
   canDelete: boolean;
 };
 
@@ -46,17 +52,26 @@ const ProjectRow = ({
   onRename,
   onDelete,
   onDuplicateAsPlatform,
+  onDuplicateAsLocale,
+  isLocalizing,
   canDelete,
 }: ProjectRowProps) => {
   const [isEditing, setIsEditing] = useState(false);
   const [editName, setEditName] = useState(project.name);
   const [isPlatformMenuOpen, setIsPlatformMenuOpen] = useState(false);
+  const [isLocaleMenuOpen, setIsLocaleMenuOpen] = useState(false);
   const [menuPos, setMenuPos] = useState<{ top: number; left: number } | null>(
     null,
   );
+  const [localeMenuPos, setLocaleMenuPos] = useState<{
+    top: number;
+    left: number;
+  } | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const platformMenuRef = useRef<HTMLDivElement>(null);
   const platformBtnRef = useRef<HTMLButtonElement>(null);
+  const localeMenuRef = useRef<HTMLDivElement>(null);
+  const localeBtnRef = useRef<HTMLButtonElement>(null);
 
   useEffect(() => {
     if (isEditing && inputRef.current) {
@@ -81,6 +96,22 @@ const ProjectRow = ({
     return () => document.removeEventListener("mousedown", onDocClick);
   }, [isPlatformMenuOpen]);
 
+  useEffect(() => {
+    if (!isLocaleMenuOpen) return;
+    const onDocClick = (e: MouseEvent) => {
+      const target = e.target as Node;
+      if (
+        localeMenuRef.current?.contains(target) ||
+        localeBtnRef.current?.contains(target)
+      ) {
+        return;
+      }
+      setIsLocaleMenuOpen(false);
+    };
+    document.addEventListener("mousedown", onDocClick);
+    return () => document.removeEventListener("mousedown", onDocClick);
+  }, [isLocaleMenuOpen]);
+
   // Anchor the portal-rendered menu to the trigger button's screen position.
   // Re-measure on open so it tracks the button if the row scrolls.
   useLayoutEffect(() => {
@@ -88,6 +119,12 @@ const ProjectRow = ({
     const rect = platformBtnRef.current.getBoundingClientRect();
     setMenuPos({ top: rect.bottom + 4, left: rect.right - 176 });
   }, [isPlatformMenuOpen]);
+
+  useLayoutEffect(() => {
+    if (!isLocaleMenuOpen || !localeBtnRef.current) return;
+    const rect = localeBtnRef.current.getBoundingClientRect();
+    setLocaleMenuPos({ top: rect.bottom + 4, left: rect.right - 176 });
+  }, [isLocaleMenuOpen]);
 
   const handleSave = () => {
     if (editName.trim()) onRename(editName.trim());
@@ -102,11 +139,19 @@ const ProjectRow = ({
     }
   };
 
-  // Variant rows show only the platform label, since the group name above
-  // already states the app name. Standalone or first-of-group rows show the
-  // full project name.
+  // Variant rows show only the platform (and locale) label, since the group
+  // name above already states the app name. Standalone or first-of-group rows
+  // show the full project name.
+  const localeLabel = project.locale
+    ? getLocale(project.locale)?.label
+    : null;
   const displayLabel = isVariant
-    ? (PLATFORMS.find((p) => p.key === project.platform)?.label ?? project.name)
+    ? [
+        PLATFORMS.find((p) => p.key === project.platform)?.label,
+        localeLabel,
+      ]
+        .filter(Boolean)
+        .join(" — ") || project.name
     : project.name;
 
   if (isEditing) {
@@ -148,6 +193,9 @@ const ProjectRow = ({
     (p) => p.key !== project.platform,
   );
 
+  // Languages: offer every preset locale except this project's own.
+  const availableLocales = LOCALES.filter((l) => l.key !== project.locale);
+
   return (
     <div
       className={`group flex items-center justify-between px-3 py-2 cursor-pointer transition-colors ${
@@ -178,6 +226,23 @@ const ProjectRow = ({
           title="Duplicate as platform variant"
         >
           <Layers className="w-3.5 h-3.5" />
+        </button>
+        <button
+          ref={localeBtnRef}
+          disabled={isLocalizing}
+          onClick={(e) => {
+            e.stopPropagation();
+            if (isLocalizing) return;
+            setIsLocaleMenuOpen((v) => !v);
+          }}
+          className="p-1 hover:bg-zinc-700 rounded text-zinc-400 hover:text-white disabled:opacity-50 disabled:cursor-default"
+          title="Duplicate as language (AI-translated)"
+        >
+          {isLocalizing ? (
+            <Loader2 className="w-3.5 h-3.5 animate-spin" />
+          ) : (
+            <Languages className="w-3.5 h-3.5" />
+          )}
         </button>
         <button
           onClick={(e) => {
@@ -231,6 +296,38 @@ const ProjectRow = ({
           </div>,
           document.body,
         )}
+      {isLocaleMenuOpen &&
+        localeMenuPos &&
+        createPortal(
+          <div
+            ref={localeMenuRef}
+            data-locale-menu
+            style={{
+              position: "fixed",
+              top: localeMenuPos.top,
+              left: localeMenuPos.left,
+            }}
+            className="w-44 max-h-72 overflow-y-auto bg-zinc-900 border border-zinc-700 rounded-lg shadow-xl z-[120]"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="px-3 py-1.5 text-[10px] uppercase tracking-wide text-zinc-500 border-b border-zinc-800 sticky top-0 bg-zinc-900">
+              Translate to
+            </div>
+            {availableLocales.map((l) => (
+              <button
+                key={l.key}
+                onClick={() => {
+                  onDuplicateAsLocale(l.key);
+                  setIsLocaleMenuOpen(false);
+                }}
+                className="w-full text-left px-3 py-1.5 text-sm text-zinc-200 hover:bg-zinc-800 transition-colors"
+              >
+                {l.label}
+              </button>
+            ))}
+          </div>,
+          document.body,
+        )}
     </div>
   );
 };
@@ -278,6 +375,9 @@ export const ProjectSwitcher = () => {
     deleteProject,
     switchProject,
     duplicateProjectAsPlatform,
+    duplicateProjectAsLocale,
+    localizingProjectId,
+    localizeError,
   } = useEditor();
 
   const [isOpen, setIsOpen] = useState(false);
@@ -309,12 +409,12 @@ export const ProjectSwitcher = () => {
       if (!dropdownRef.current || dropdownRef.current.contains(target as Node)) {
         return;
       }
-      // The "Duplicate as platform" menu is rendered through a portal at body
-      // level, so it's outside `dropdownRef`. Keep the dropdown open when a
-      // click lands inside one of those portal menus — otherwise React
-      // unmounts the menu between mousedown and click and the menu item's
-      // click handler never fires.
-      if (target?.closest("[data-platform-menu]")) {
+      // The "Duplicate as platform" and "Duplicate as language" menus are
+      // rendered through portals at body level, so they're outside `dropdownRef`.
+      // Keep the dropdown open when a click lands inside one of those portal
+      // menus — otherwise React unmounts the menu between mousedown and click
+      // and the menu item's click handler never fires.
+      if (target?.closest("[data-platform-menu]") || target?.closest("[data-locale-menu]")) {
         return;
       }
       setIsOpen(false);
@@ -402,6 +502,11 @@ export const ProjectSwitcher = () => {
                       duplicateProjectAsPlatform(p.id, platform);
                       setIsOpen(false);
                     }}
+                    onDuplicateAsLocale={(localeKey) => {
+                      void duplicateProjectAsLocale(p.id, localeKey);
+                      setIsOpen(false);
+                    }}
+                    isLocalizing={localizingProjectId === p.id}
                     canDelete={projects.length > 1}
                   />
                 );
@@ -445,6 +550,11 @@ export const ProjectSwitcher = () => {
                           duplicateProjectAsPlatform(p.id, platform);
                           setIsOpen(false);
                         }}
+                        onDuplicateAsLocale={(localeKey) => {
+                          void duplicateProjectAsLocale(p.id, localeKey);
+                          setIsOpen(false);
+                        }}
+                        isLocalizing={localizingProjectId === p.id}
                         canDelete={projects.length > 1}
                       />
                     ))}
@@ -452,6 +562,12 @@ export const ProjectSwitcher = () => {
               );
             })}
           </div>
+
+          {localizeError && (
+            <div className="mx-2 mb-1 px-3 py-2 text-xs text-red-300 bg-red-950/50 border border-red-900/60 rounded">
+              Translation failed: {localizeError}
+            </div>
+          )}
 
           <div className="border-t border-zinc-800">
             {isCreating ? (
