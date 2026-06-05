@@ -10,7 +10,7 @@ import { AlertCircle, Check, X } from "lucide-react";
 import type { Screenshot } from "../../types";
 import { SidebarSection } from "./SidebarSection";
 import { RichTextEditor } from "../RichTextEditor";
-import { SuggestButton } from "../AISuggest";
+import { SuggestButton, LanguageMenuButton } from "../AISuggest";
 import { useEditor } from "../../context/EditorContext";
 import { useModelLabel } from "../../lib/ai/use-model-label";
 
@@ -30,6 +30,10 @@ export const ContentSection = ({
     generateContentSuggestions,
     applyContentSuggestion,
     dismissContentSuggestions,
+    translateScreenshotField,
+    translatingField,
+    translateFieldError,
+    dismissTranslateFieldError,
   } = useEditor();
   const modelLabel = useModelLabel("cheap");
 
@@ -49,22 +53,79 @@ export const ContentSection = ({
         </div>
 
         <div>
-          <label className="block text-xs text-gray-400 mb-1">Headline</label>
+          <div className="flex items-center justify-between mb-1">
+            <label className="block text-xs text-gray-400">Headline</label>
+            <LanguageMenuButton
+              onSelect={(localeKey) =>
+                void translateScreenshotField(
+                  screenshot.id,
+                  "headline",
+                  localeKey,
+                )
+              }
+              isLoading={
+                translatingField?.id === screenshot.id &&
+                translatingField?.field === "headline"
+              }
+              disabled={translatingField !== null}
+              title="Translate headline in place"
+            />
+          </div>
           <RichTextEditor
             value={screenshot.headline}
-            onChange={(html) => onUpdateScreenshot({ headline: html })}
+            onChange={(html) => {
+              onUpdateScreenshot({ headline: html });
+              dismissTranslateFieldError();
+            }}
             placeholder="Enter headline..."
           />
         </div>
 
         <div>
-          <label className="block text-xs text-gray-400 mb-1">Subheadline</label>
+          <div className="flex items-center justify-between mb-1">
+            <label className="block text-xs text-gray-400">Subheadline</label>
+            <LanguageMenuButton
+              onSelect={(localeKey) =>
+                void translateScreenshotField(
+                  screenshot.id,
+                  "subheadline",
+                  localeKey,
+                )
+              }
+              isLoading={
+                translatingField?.id === screenshot.id &&
+                translatingField?.field === "subheadline"
+              }
+              disabled={translatingField !== null}
+              title="Translate subheadline in place"
+            />
+          </div>
           <RichTextEditor
             value={screenshot.subheadline}
-            onChange={(html) => onUpdateScreenshot({ subheadline: html })}
+            onChange={(html) => {
+              onUpdateScreenshot({ subheadline: html });
+              dismissTranslateFieldError();
+            }}
             placeholder="Enter subheadline..."
           />
         </div>
+
+        {translateFieldError &&
+          translateFieldError.screenshotId === screenshot.id && (
+            <div className="flex items-start gap-1.5 text-[11px] text-red-400 bg-red-500/5 border border-red-500/20 rounded px-2 py-1.5">
+              <AlertCircle className="w-3 h-3 mt-0.5 flex-shrink-0" />
+              <span className="whitespace-pre-wrap break-words flex-1">
+                {translateFieldError.message}
+              </span>
+              <button
+                type="button"
+                onClick={dismissTranslateFieldError}
+                className="text-zinc-500 hover:text-white"
+              >
+                <X className="w-3 h-3" />
+              </button>
+            </div>
+          )}
 
         {contentError && (
           <div className="flex items-start gap-1.5 text-[11px] text-red-400 bg-red-500/5 border border-red-500/20 rounded px-2 py-1.5">

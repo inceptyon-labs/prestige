@@ -55,7 +55,7 @@ import {
 } from "../lib/ai/image/compose-prompt";
 import { enrichImagePrompt } from "../lib/ai/features/enrich-image-prompt";
 import { generateHeroCard } from "../lib/ai/features/hero-card";
-import { translatePanels } from "../lib/ai/features/translate";
+import { translatePanels, translateText } from "../lib/ai/features/translate";
 import { normalizeRichTextHighlights } from "../lib/rich-text-highlight";
 import type {
   ImageModelId,
@@ -147,6 +147,21 @@ interface EditorContextType {
   generateContentSuggestions: () => Promise<void>;
   applyContentSuggestion: (pair: ContentPair) => void;
   dismissContentSuggestions: () => void;
+  /** Translate a single field of a screenshot in place. */
+  translateScreenshotField: (
+    screenshotId: string,
+    field: "headline" | "subheadline",
+    localeKey: string,
+  ) => Promise<void>;
+  /** Field currently being translated, or null when idle. */
+  translatingField: { id: string; field: "headline" | "subheadline" } | null;
+  /** Keyed translation error for a specific field, or null when idle. */
+  translateFieldError: {
+    screenshotId: string;
+    field: "headline" | "subheadline";
+    message: string;
+  } | null;
+  dismissTranslateFieldError: () => void;
 
   isGeneratingTheme: boolean;
   themeSuggestion: ThemeConfig | null;
@@ -484,6 +499,17 @@ export const EditorProvider = ({ children }: { children: ReactNode }) => {
   const [isGeneratingContent, setIsGeneratingContent] = useState(false);
   const [contentSuggestions, setContentSuggestions] = useState<ContentPair[]>([]);
   const [contentError, setContentError] = useState<string | null>(null);
+  const [translatingField, setTranslatingField] = useState<{
+    id: string;
+    field: "headline" | "subheadline";
+  } | null>(null);
+  const [translateFieldError, setTranslateFieldError] = useState<{
+    screenshotId: string;
+    field: "headline" | "subheadline";
+    message: string;
+  } | null>(null);
+  // Concurrency guard for in-flight translations using a counter, not just state
+  const inFlightTranslateRef = useRef(0);
 
   const [isGeneratingTheme, setIsGeneratingTheme] = useState(false);
   const [themeSuggestion, setThemeSuggestion] = useState<ThemeConfig | null>(
@@ -1041,6 +1067,100 @@ export const EditorProvider = ({ children }: { children: ReactNode }) => {
     setContentSuggestions([]);
     setContentError(null);
   }, []);
+
+  const dismissTranslateFieldError = useCallback(() => {
+    setTranslateFieldError(null);
+  }, []);
+
+  const translateScreenshotField = useCallback(
+    async (
+      screenshotId: string,
+      field: "headline" | "subheadline",
+      localeKey: string,
+    ) => {
+      if (inFlightTranslateRef.current > 0 || translatingField) return;
+      const locale = getLocale(localeKey);
+      if (!locale) return;
+      const target = screenshots.find((s) => s.id === screenshotId);
+      if (!target) return;
+      const sourceText = target[field];
+      if (!sourceText || !sourceText.trim()) {
+        setTranslateFieldError({
+          screenshotId,
+          field,
+          message: "Nothing to translate in this field yet",
+        });
+        return;
+      }
+
+      inFlightTranslateRef.current++;
+      setTranslateFieldError(null);
+      setTranslatingField({ id: screenshotId, field });
+      try {
+        const providerId = activeProject.ai?.provider ?? "claude";
+        const provider = getProvider(providerId);
+        const result = await translateText({
+          provider,
+          model: resolveModelForTier(providerId, "cheap"),
+          targetLanguage: locale.label,
+          text: sourceText,
+          brand: {
+            brandName: activeProject.ai?.brandName,
+            audience: activeProject.ai?.audience,
+            voice: activeProject.ai?.voice,
+            keyFeature: activeProject.ai?.keyFeature,
+            folder: brandFolderContents,
+          },
+        });
+        if (!result.text) {
+          setTranslateFieldError({
+            screenshotId,
+            field,
+            message: "Translation returned nothing. Try again.",
+          });
+          return;
+        }
+        const sanitized = normalizeRichTextHighlights(result.text);
+        if (!sanitized || !sanitized.trim()) {
+          setTranslateFieldError({
+            screenshotId,
+            field,
+            message: "Translation returned no valid content. Try again.",
+          });
+          return;
+        }
+        // Verify the field hasn't changed before applying translation
+        setScreenshotsState((prev) => {
+          const current = prev.find((s) => s.id === screenshotId);
+          // Only apply if field still matches original source text
+          if (current && current[field] === sourceText) {
+            return prev.map((s) =>
+              s.id === screenshotId ? { ...s, [field]: sanitized } : s,
+            );
+          }
+          // Field was edited, discard translation
+          if (current && current[field] !== sourceText) {
+            setTranslateFieldError({
+              screenshotId,
+              field,
+              message: "Field was edited during translation. Please try again.",
+            });
+          }
+          return prev;
+        });
+      } catch (err) {
+        setTranslateFieldError({
+          screenshotId,
+          field,
+          message: err instanceof Error ? err.message : String(err),
+        });
+      } finally {
+        inFlightTranslateRef.current--;
+        setTranslatingField(null);
+      }
+    },
+    [translatingField, screenshots, activeProject.ai, brandFolderContents],
+  );
 
   const generateThemeSuggestion = useCallback(async () => {
     setIsGeneratingTheme(true);
@@ -3082,17 +3202,20 @@ export const EditorProvider = ({ children }: { children: ReactNode }) => {
 
   const handleExport = async () => {
     try {
-      await exportScreenshots({
+      const { savedName, count } = await exportScreenshots({
         screenshots,
         exportSize,
         previewDimensions,
         headlineFontSize,
         subheadlineFontSize,
+        locale: activeProject.locale,
       });
       const message =
-        screenshots.length === 1
-          ? "Saved appstore-screenshot-1.png to Downloads"
-          : `Saved appstore-screenshots.zip (${screenshots.length} files) to Downloads`;
+        count === 0
+          ? "Nothing to export"
+          : count === 1 && savedName.endsWith(".png")
+            ? `Saved ${savedName} to Downloads`
+            : `Saved ${savedName} (${count} files) to Downloads`;
       setExportToast({ message, tone: "success" });
     } catch (err) {
       console.error("Export failed:", err);
@@ -3228,6 +3351,10 @@ export const EditorProvider = ({ children }: { children: ReactNode }) => {
         generateContentSuggestions,
         applyContentSuggestion,
         dismissContentSuggestions,
+        translateScreenshotField,
+        translatingField,
+        translateFieldError,
+        dismissTranslateFieldError,
         isGeneratingTheme,
         themeSuggestion,
         themeError,

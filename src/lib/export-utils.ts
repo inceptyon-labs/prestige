@@ -5,7 +5,7 @@ import type {
   ExportSize,
   DeviceInstance,
 } from "../types";
-import { gradientPresets } from "../constants";
+import { gradientPresets, getLocale } from "../constants";
 import { drawRichText } from "./rich-text-canvas";
 import { getDeviceColorById, getDeviceSpecById } from "./device-instances";
 import { getRenderableDevicesForScreenshot } from "./device-overflow";
@@ -17,6 +17,20 @@ interface ExportOptions {
   previewDimensions: { width: number; height: number };
   headlineFontSize: number;
   subheadlineFontSize: number;
+  /**
+   * App Store locale code (e.g. "es-ES"). When set, exported files are nested
+   * under a `<locale>/` folder inside the zip — the layout App Store Connect /
+   * fastlane `deliver` expects for localized screenshots — and the export is
+   * always zipped (even a single file) so the folder structure survives.
+   */
+  locale?: string;
+}
+
+export interface ExportResult {
+  /** Name of the file written to Downloads (the .png or the .zip). */
+  savedName: string;
+  /** Number of screenshots exported. */
+  count: number;
 }
 
 /**
@@ -47,22 +61,25 @@ const downloadFile = (dataURL: string, filename: string) => {
 /**
  * Download multiple files as ZIP
  */
-const downloadAsZip = async (files: { name: string; data: string }[]) => {
+const downloadAsZip = async (
+  files: { name: string; data: string }[],
+  zipName: string,
+) => {
   const zip = new JSZip();
-  
+
   for (const file of files) {
     const blob = dataURLtoBlob(file.data);
     zip.file(file.name, blob);
   }
-  
+
   const content = await zip.generateAsync({ type: "blob" });
   const url = URL.createObjectURL(content);
-  
+
   const link = document.createElement("a");
-  link.download = "prestige-screenshots.zip";
+  link.download = zipName;
   link.href = url;
   link.click();
-  
+
   // Clean up
   URL.revokeObjectURL(url);
 };
@@ -899,15 +916,30 @@ export const exportScreenshots = async ({
   previewDimensions,
   headlineFontSize,
   subheadlineFontSize,
-}: ExportOptions) => {
+  locale,
+}: ExportOptions): Promise<ExportResult> => {
   // Wait for fonts to be loaded before exporting
   await document.fonts.ready;
+
+  // Validate and sanitize locale to prevent ZIP-slip attacks
+  let validatedLocale: string | undefined;
+  if (locale) {
+    const localeObj = getLocale(locale);
+    if (!localeObj) {
+      throw new Error(`Invalid locale: ${locale}`);
+    }
+    validatedLocale = locale;
+  }
+
+  // When a locale is set, nest files under `<locale>/` so the zip drops
+  // straight into App Store Connect / fastlane's localized layout.
+  const folderPrefix = validatedLocale ? `${validatedLocale}/` : "";
 
   const exportedFiles: { name: string; data: string }[] = [];
 
   for (let i = 0; i < screenshots.length; i++) {
     const screenshot = screenshots[i];
-    const filename = `prestige-screenshot-${i + 1}.png`;
+    const filename = `${folderPrefix}prestige-screenshot-${i + 1}.png`;
 
     const canvas = document.createElement("canvas");
     canvas.width = exportSize.width;
@@ -1080,10 +1112,26 @@ export const exportScreenshots = async ({
     exportedFiles.push({ name: filename, data: dataURL });
   }
 
-  // Download: single file directly, multiple files as ZIP
-  if (exportedFiles.length === 1) {
-    downloadFile(exportedFiles[0].data, exportedFiles[0].name);
-  } else if (exportedFiles.length > 1) {
-    await downloadAsZip(exportedFiles);
+  // Download. With a locale we always zip (even a single file) so the
+  // `<locale>/` folder survives. Otherwise: single file direct, many as zip.
+  const zipName = locale
+    ? `prestige-${locale}-screenshots.zip`
+    : "prestige-screenshots.zip";
+
+  if (exportedFiles.length === 0) {
+    if (screenshots.length > 0) {
+      throw new Error(
+        "Failed to render screenshots. Check your browser console for errors.",
+      );
+    }
+    return { savedName: "", count: 0 };
   }
+
+  if (exportedFiles.length === 1 && !locale) {
+    downloadFile(exportedFiles[0].data, exportedFiles[0].name);
+    return { savedName: exportedFiles[0].name, count: 1 };
+  }
+
+  await downloadAsZip(exportedFiles, zipName);
+  return { savedName: zipName, count: exportedFiles.length };
 };

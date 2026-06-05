@@ -145,3 +145,89 @@ export const translatePanels = async ({
     durationMs: result.durationMs,
   };
 };
+
+// --- Single-field translation (inline "translate this one line" helper) ---
+
+const SINGLE_SYSTEM = `You are an expert App Store / Google Play screenshot localizer.
+You translate ONE short line of marketing copy into a target language.
+
+Rules:
+- Translate for marketing impact, not word-for-word. Read like a native copywriter wrote it.
+- Keep it screenshot-friendly: roughly the same length as the source, punchy.
+- Match the brand voice if given. Do NOT translate brand or product names.
+- PRESERVE HTML EXACTLY. The line may contain HTML tags (e.g. <mark>, <span style="...">). Keep every tag, attribute, and its position around the same words. Translate ONLY the visible text.
+- Output ONLY the translated line. No quotes, no prose, no explanations, no markdown fences.`;
+
+export interface TranslateTextRequest {
+  provider: AIProvider;
+  /** Optional model id; falls back to provider default when omitted. */
+  model?: string;
+  /** English display name of the target language, e.g. "Spanish". */
+  targetLanguage: string;
+  /** The single HTML line to translate. */
+  text: string;
+  brand: {
+    brandName?: string;
+    audience?: string;
+    voice?: string;
+    keyFeature?: string;
+    folder?: BrandFolderContents | null;
+  };
+}
+
+export interface TranslateTextResponse {
+  text: string;
+  raw: string;
+  durationMs: number;
+}
+
+/**
+ * Strip the conversational wrapping models sometimes add to a single-line
+ * answer: code fences and a single layer of surrounding quotes. Leaves inner
+ * HTML untouched.
+ */
+export const cleanTranslatedLine = (raw: string): string => {
+  let out = raw.trim();
+  const fence = out.match(/```(?:\w+)?\s*([\s\S]*?)```/);
+  if (fence) out = fence[1].trim();
+  if (out.length >= 2) {
+    const first = out[0];
+    const last = out[out.length - 1];
+    if ((first === '"' && last === '"') || (first === "'" && last === "'")) {
+      out = out.slice(1, -1).trim();
+    }
+  }
+  return out;
+};
+
+export const translateText = async ({
+  provider,
+  model,
+  targetLanguage,
+  text,
+  brand,
+}: TranslateTextRequest): Promise<TranslateTextResponse> => {
+  const brandContext = composeBrandContext(brand);
+
+  const userPrompt = [
+    brandContext ? `Brand context:\n${brandContext}` : null,
+    `Target language: ${targetLanguage}`,
+    "",
+    "Translate this line into the target language. Output only the translated line:",
+    text,
+  ]
+    .filter(Boolean)
+    .join("\n");
+
+  const result = await provider.run(userPrompt, {
+    system: SINGLE_SYSTEM,
+    timeoutMs: 120_000,
+    model,
+  });
+
+  return {
+    text: cleanTranslatedLine(result.text),
+    raw: result.text,
+    durationMs: result.durationMs,
+  };
+};

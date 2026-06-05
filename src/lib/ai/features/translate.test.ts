@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { parseTranslatedPanels } from "./translate";
+import { parseTranslatedPanels, cleanTranslatedLine } from "./translate";
 
 describe("parseTranslatedPanels", () => {
   it("parses a clean JSON array", () => {
@@ -58,5 +58,36 @@ describe("parseTranslatedPanels", () => {
 
   it("returns an empty array for non-JSON garbage", () => {
     expect(parseTranslatedPanels("sorry, I can't do that")).toEqual([]);
+  });
+});
+
+describe("cleanTranslatedLine", () => {
+  it("passes a clean line through untouched", () => {
+    expect(cleanTranslatedLine("Sigue tu progreso")).toBe("Sigue tu progreso");
+  });
+
+  it("trims surrounding whitespace", () => {
+    expect(cleanTranslatedLine("  Hola mundo \n")).toBe("Hola mundo");
+  });
+
+  it("strips a single layer of wrapping quotes", () => {
+    expect(cleanTranslatedLine('"Bonjour le monde"')).toBe(
+      "Bonjour le monde",
+    );
+    expect(cleanTranslatedLine("'Ciao mondo'")).toBe("Ciao mondo");
+  });
+
+  it("unwraps a fenced code block", () => {
+    expect(cleanTranslatedLine("```\nHallo Welt\n```")).toBe("Hallo Welt");
+  });
+
+  it("preserves inner HTML markup", () => {
+    expect(cleanTranslatedLine("Sigue tu <mark>progreso</mark>")).toBe(
+      "Sigue tu <mark>progreso</mark>",
+    );
+  });
+
+  it("does not strip apostrophes inside the line", () => {
+    expect(cleanTranslatedLine("L'avenir est ici")).toBe("L'avenir est ici");
   });
 });
