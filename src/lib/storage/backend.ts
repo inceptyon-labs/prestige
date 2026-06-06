@@ -40,6 +40,14 @@ export interface StorageBackend {
   deleteSnapshot(id: string): Promise<void>;
   getSnapshot(id: string): Promise<Snapshot | undefined>;
 
+  // Content-addressed image blobs. Keyed by a hash of the bytes so identical
+  // images are stored once and shared across projects/variants.
+  putBlob(hash: string, blob: Blob): Promise<void>;
+  getBlob(hash: string): Promise<Blob | undefined>;
+  hasBlob(hash: string): Promise<boolean>;
+  listBlobHashes(): Promise<string[]>;
+  deleteBlob(hash: string): Promise<void>;
+
   // Meta (singleton key/value rows)
   getMeta<T = unknown>(key: string): Promise<T | undefined>;
   setMeta(key: string, value: unknown): Promise<void>;

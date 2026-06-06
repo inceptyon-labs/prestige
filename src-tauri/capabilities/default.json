@@ -11,6 +11,7 @@
     "fs:allow-appdata-read-recursive",
     "fs:allow-appdata-write-recursive",
     "fs:allow-appdata-meta-recursive",
+    "fs:allow-rename",
     {
       "identifier": "fs:scope",
       "allow": [
@@ -18,6 +19,8 @@
         { "path": "$APPDATA/projects/**" },
         { "path": "$APPDATA/snapshots" },
         { "path": "$APPDATA/snapshots/**" },
+        { "path": "$APPDATA/blobs" },
+        { "path": "$APPDATA/blobs/**" },
         { "path": "$APPDATA/meta.json" },
         { "path": "$APPDATA/settings.json" }
       ]

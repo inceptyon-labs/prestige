@@ -7,6 +7,7 @@
 import type { ImageOverlay } from "../../types";
 import { SelectionHandles } from "./SelectionHandles";
 import { getOverlayImageStyles, getDropShadowFilter } from "./utils";
+import { useResolvedImage } from "../../lib/storage/image-store";
 
 interface OverlayImageProps {
   /** Overlay image data */
@@ -49,20 +50,24 @@ export const OverlayImage = ({
   isSelected,
   isInteractive,
   onMouseDown,
-}: OverlayImageProps) => (
-  <div
-    data-draggable-element="image"
-    className="absolute cursor-move select-none"
-    style={getOverlayImageStyles(image, zIndex, isSelected)}
-    onMouseDown={isInteractive ? onMouseDown : undefined}
-    onClick={(e) => e.stopPropagation()}
-  >
-    <img
-      src={image.src}
-      alt="Overlay"
-      className="w-full h-full object-contain pointer-events-none"
-      style={{ filter: getDropShadowFilter(image.shadow) }}
-    />
-    {isSelected && <SelectionHandles />}
-  </div>
-);
+}: OverlayImageProps) => {
+  const resolved = useResolvedImage(image.src);
+  return (
+    <div
+      data-draggable-element="image"
+      className="absolute cursor-move select-none"
+      style={getOverlayImageStyles(image, zIndex, isSelected)}
+      onMouseDown={isInteractive ? onMouseDown : undefined}
+      onClick={(e) => e.stopPropagation()}
+    >
+      <img
+        src={resolved ?? undefined}
+        alt="Overlay"
+        decoding="async"
+        className="w-full h-full object-contain pointer-events-none"
+        style={{ filter: getDropShadowFilter(image.shadow) }}
+      />
+      {isSelected && <SelectionHandles />}
+    </div>
+  );
+};

@@ -14,6 +14,7 @@ import { DeviceContainer } from "./DeviceContainer";
 import { SnapGuideOverlay } from "./SnapGuideOverlay";
 import { isElementSelected } from "./utils";
 import { Z_INDEX } from "./constants";
+import { useResolvedImage } from "../../lib/storage/image-store";
 
 interface ScreenshotCardProps {
   /** Screenshot data */
@@ -35,7 +36,10 @@ interface ScreenshotCardProps {
   /** Ref for preview element (only attached to active screenshot) */
   previewRef: RefObject<HTMLDivElement | null>;
   /** Background style getter */
-  getBackgroundStyle: (screenshot: Screenshot) => string;
+  getBackgroundStyle: (
+    screenshot: Screenshot,
+    resolvedImageUrl?: string | null,
+  ) => string;
   /** Handler for selecting this screenshot */
   onSelect: () => void;
   /** Handler for removing this screenshot */
@@ -92,6 +96,13 @@ export const ScreenshotCard = ({
   // Hero panels render text + bg image only; the device chrome is hidden.
   const showDevices = !screenshot.isHero;
 
+  // Resolve the background image ref (pblob:) to a usable object URL.
+  const resolvedBg = useResolvedImage(
+    screenshot.backgroundMode === "image"
+      ? screenshot.backgroundImageSrc
+      : null,
+  );
+
   // Handle background click to deselect
   const handleBackgroundMouseDown = (e: React.MouseEvent) => {
     const target = e.target as HTMLElement;
@@ -111,7 +122,7 @@ export const ScreenshotCard = ({
         isActive ? "opacity-100" : "opacity-70 hover:opacity-100"
       }`}
       style={{
-        background: getBackgroundStyle(screenshot),
+        background: getBackgroundStyle(screenshot, resolvedBg),
         aspectRatio: `${exportSize.width}/${exportSize.height}`,
         boxShadow: isActive
           ? "inset 0 0 0 2px rgba(255, 255, 255, 0.95)"

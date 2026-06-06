@@ -6,6 +6,7 @@ import type {
   DeviceInstance,
 } from "../types";
 import { gradientPresets, getLocale } from "../constants";
+import { resolve as resolveImageRef } from "./storage/image-store";
 import { drawRichText } from "./rich-text-canvas";
 import { getDeviceColorById, getDeviceSpecById } from "./device-instances";
 import { getRenderableDevicesForScreenshot } from "./device-overflow";
@@ -346,7 +347,8 @@ const renderDeviceToOffscreen = async (
   ctx.fill();
 
   // --- Screenshot image ---
-  if (screenshotSrc) {
+  const screenshotUrl = await resolveImageRef(screenshotSrc);
+  if (screenshotUrl) {
     const img = new Image();
     img.crossOrigin = "anonymous";
     await new Promise<void>((resolve) => {
@@ -360,7 +362,7 @@ const renderDeviceToOffscreen = async (
         resolve();
       };
       img.onerror = () => resolve();
-      img.src = screenshotSrc;
+      img.src = screenshotUrl;
     });
   }
 
@@ -846,8 +848,8 @@ const drawDeviceInstance = async (
   ctx.roundRect(screenX, screenY, screenWidthPx, screenHeightPx, screenRadius);
   ctx.fill();
 
-  const screenshotSrc = device.screenshotSrc;
-  if (screenshotSrc) {
+  const screenshotUrl = await resolveImageRef(device.screenshotSrc);
+  if (screenshotUrl) {
     const img = new Image();
     img.crossOrigin = "anonymous";
     await new Promise<void>((resolve) => {
@@ -861,7 +863,7 @@ const drawDeviceInstance = async (
         resolve();
       };
       img.onerror = () => resolve();
-      img.src = screenshotSrc;
+      img.src = screenshotUrl;
     });
   }
 
@@ -971,33 +973,36 @@ export const exportScreenshots = async ({
       }
       ctx.fillStyle = gradient;
       ctx.fillRect(0, 0, canvas.width, canvas.height);
-    } else if (
-      screenshot.backgroundMode === "image" &&
-      screenshot.backgroundImageSrc
-    ) {
-      const bgImg = new Image();
-      bgImg.crossOrigin = "anonymous";
-      bgImg.src = screenshot.backgroundImageSrc;
-      await new Promise<void>((resolve) => {
-        bgImg.onload = () => {
-          const opacity = screenshot.backgroundImageOpacity ?? 1;
-          ctx.save();
-          ctx.globalAlpha = opacity;
-          // Cover: scale so the shorter axis fills, center, crop overflow.
-          const scale = Math.max(
-            canvas.width / bgImg.width,
-            canvas.height / bgImg.height,
-          );
-          const drawW = bgImg.width * scale;
-          const drawH = bgImg.height * scale;
-          const dx = (canvas.width - drawW) / 2;
-          const dy = (canvas.height - drawH) / 2;
-          ctx.drawImage(bgImg, dx, dy, drawW, drawH);
-          ctx.restore();
-          resolve();
-        };
-        bgImg.onerror = () => resolve();
-      });
+    } else if (screenshot.backgroundMode === "image") {
+      const bgUrl =
+        screenshot.backgroundImageSrc
+          ? await resolveImageRef(screenshot.backgroundImageSrc)
+          : null;
+      if (bgUrl) {
+        const bgImg = new Image();
+        bgImg.crossOrigin = "anonymous";
+        await new Promise<void>((resolve) => {
+          bgImg.onload = () => {
+            const opacity = screenshot.backgroundImageOpacity ?? 1;
+            ctx.save();
+            ctx.globalAlpha = opacity;
+            // Cover: scale so the shorter axis fills, center, crop overflow.
+            const scale = Math.max(
+              canvas.width / bgImg.width,
+              canvas.height / bgImg.height,
+            );
+            const drawW = bgImg.width * scale;
+            const drawH = bgImg.height * scale;
+            const dx = (canvas.width - drawW) / 2;
+            const dy = (canvas.height - drawH) / 2;
+            ctx.drawImage(bgImg, dx, dy, drawW, drawH);
+            ctx.restore();
+            resolve();
+          };
+          bgImg.onerror = () => resolve();
+          bgImg.src = bgUrl;
+        });
+      }
     }
 
     // Helper to draw overlay images
@@ -1006,6 +1011,8 @@ export const exportScreenshots = async ({
         (img) => (img.layer ?? "front") === layer,
       );
       for (const overlayImg of images) {
+        const overlayUrl = await resolveImageRef(overlayImg.src);
+        if (!overlayUrl) continue;
         const img = new Image();
         img.crossOrigin = "anonymous";
         await new Promise<void>((resolve) => {
@@ -1050,7 +1057,7 @@ export const exportScreenshots = async ({
             resolve();
           };
           img.onerror = () => resolve();
-          img.src = overlayImg.src;
+          img.src = overlayUrl;
         });
       }
     };

@@ -12,11 +12,49 @@ import type { Project } from "../types";
 import {
   getMeta,
   listProjects,
+  listSnapshots,
   migrateFromLocalStorage,
+  putProject,
+  putSnapshot,
   saveEditorState,
+  setMeta,
 } from "./storage/db";
+import { externalizeProject, hasInlineImages } from "./storage/image-store";
 
 const AUTO_SAVE_DELAY_MS = 800;
+const BLOB_MIGRATION_FLAG = "migrated:blobs-v1";
+
+/**
+ * One-time: pull every project's (and snapshot's) inline base64 images out into
+ * the content-addressed blob store, rewriting them to short pblob: refs. Runs on
+ * first launch after the blob-store update. Returns the externalized projects so
+ * the in-memory hydrate uses refs immediately (freeing the base64 from memory).
+ */
+const migrateInlineImagesToBlobs = async (
+  projectList: Project[],
+): Promise<Project[]> => {
+  const already = await getMeta<boolean>(BLOB_MIGRATION_FLAG);
+  if (already) return projectList;
+
+  const out: Project[] = [];
+  for (const p of projectList) {
+    const ext = hasInlineImages(p) ? await externalizeProject(p) : p;
+    if (ext !== p) await putProject(ext);
+    out.push(ext);
+    // Snapshots aren't part of the editor state load; migrate them in place.
+    const snaps = await listSnapshots(p.id);
+    for (const snap of snaps) {
+      if (hasInlineImages(snap.project)) {
+        await putSnapshot({
+          ...snap,
+          project: await externalizeProject(snap.project),
+        });
+      }
+    }
+  }
+  await setMeta(BLOB_MIGRATION_FLAG, true);
+  return out;
+};
 
 export interface HydratedState {
   projects: Project[];
@@ -75,8 +113,10 @@ export const useEditorStorage = (
           getMeta<string>("activeProjectId"),
         ]);
         if (cancelled) return;
+        const projects = await migrateInlineImagesToBlobs(projectList);
+        if (cancelled) return;
         setHydrated({
-          projects: projectList,
+          projects,
           activeProjectId: activeId,
         });
       } catch (err) {
@@ -102,7 +142,13 @@ export const useEditorStorage = (
       setIsSaving(true);
       setSaveError(null);
       try {
-        await saveEditorState(projectsToSave, activeIdToSave);
+        // Externalize inline data: images into the content-addressed blob
+        // store, so persisted project JSON holds short pblob: refs (not MB of
+        // base64). Identical images dedupe to one blob.
+        const externalized = await Promise.all(
+          projectsToSave.map(externalizeProject),
+        );
+        await saveEditorState(externalized, activeIdToSave);
         setLastSaved(Date.now());
       } catch (err) {
         console.error("Failed to save editor state:", err);

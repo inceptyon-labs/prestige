@@ -7,6 +7,7 @@
 import { ArrowUp, ArrowDown, X } from "lucide-react";
 import { STYLES } from "./constants";
 import type { OverlayImageItemProps } from "./types";
+import { useResolvedImage } from "../../lib/storage/image-store";
 
 /**
  * OverlayImageItem - Overlay image list item
@@ -24,7 +25,9 @@ export const OverlayImageItem = ({
   onRemove,
   onMoveForward,
   onMoveBackward,
-}: OverlayImageItemProps) => (
+}: OverlayImageItemProps) => {
+  const resolved = useResolvedImage(image.src);
+  return (
   <div
     onClick={onSelect}
     className={`${STYLES.overlayItem} ${
@@ -32,7 +35,7 @@ export const OverlayImageItem = ({
     }`}
   >
     <img
-      src={image.src}
+      src={resolved ?? undefined}
       alt={`Overlay ${index + 1}`}
       className={STYLES.overlayThumbnail}
     />
@@ -77,4 +80,5 @@ export const OverlayImageItem = ({
       </button>
     </div>
   </div>
-);
+  );
+};

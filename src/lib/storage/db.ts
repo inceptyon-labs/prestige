@@ -48,6 +48,18 @@ export const deleteSnapshot = (id: string): Promise<void> =>
 export const getSnapshot = (id: string): Promise<Snapshot | undefined> =>
   backend.getSnapshot(id);
 
+// --- Image blobs (content-addressed) ---------------------------------------
+export const putBlob = (hash: string, blob: Blob): Promise<void> =>
+  backend.putBlob(hash, blob);
+export const getBlob = (hash: string): Promise<Blob | undefined> =>
+  backend.getBlob(hash);
+export const hasBlob = (hash: string): Promise<boolean> =>
+  backend.hasBlob(hash);
+export const listBlobHashes = (): Promise<string[]> =>
+  backend.listBlobHashes();
+export const deleteBlob = (hash: string): Promise<void> =>
+  backend.deleteBlob(hash);
+
 // --- Meta -------------------------------------------------------------------
 export const getMeta = <T = unknown>(key: string): Promise<T | undefined> =>
   backend.getMeta<T>(key);

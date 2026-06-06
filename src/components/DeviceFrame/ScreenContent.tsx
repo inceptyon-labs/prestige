@@ -5,8 +5,10 @@
  * Shows either the uploaded screenshot or a placeholder message.
  */
 
+import { useResolvedImage } from "../../lib/storage/image-store";
+
 interface ScreenContentProps {
-  /** URL of the screenshot image, or null if no image is uploaded */
+  /** Image value: a pblob: ref, data: URL, or null. */
   screenshotSrc: string | null;
 }
 
@@ -25,11 +27,13 @@ interface ScreenContentProps {
  * <ScreenContent screenshotSrc={null} />
  */
 export const ScreenContent = ({ screenshotSrc }: ScreenContentProps) => {
+  const resolved = useResolvedImage(screenshotSrc);
   if (screenshotSrc) {
     return (
       <img
-        src={screenshotSrc}
+        src={resolved ?? undefined}
         alt="Screenshot"
+        decoding="async"
         className="w-full h-full object-fill"
       />
     );

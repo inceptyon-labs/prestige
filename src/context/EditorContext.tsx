@@ -96,6 +96,12 @@ import {
   putSnapshot,
   type Snapshot,
 } from "../lib/storage/db";
+import {
+  externalizeProject,
+  inlineProject,
+  resolveToDataUrl,
+  sweepBlobs,
+} from "../lib/storage/image-store";
 
 function generateId() {
   return Math.random().toString(36).substring(2, 9);
@@ -328,7 +334,10 @@ interface EditorContextType {
   sendImageToBack: (imageId: string) => void;
   handleFileUpload: (event: React.ChangeEvent<HTMLInputElement>) => void;
   handleExport: () => void;
-  getBackgroundStyle: (screenshot: Screenshot) => string;
+  getBackgroundStyle: (
+    screenshot: Screenshot,
+    resolvedImageUrl?: string | null,
+  ) => string;
   resetEditor: () => Promise<void>;
 
   // Persistence status
@@ -345,7 +354,7 @@ interface EditorContextType {
   deleteSnapshot: (snapshotId: string) => Promise<void>;
 
   // Export / Import
-  exportProjectToFile: (projectId?: string) => void;
+  exportProjectToFile: (projectId?: string) => Promise<void>;
   importProjectFromFile: (file: File) => Promise<void>;
 
   // Undo (Ctrl/Cmd+Z) — pops the last change to the active project's editor state.
@@ -708,12 +717,19 @@ export const EditorProvider = ({ children }: { children: ReactNode }) => {
       await saveNow();
       const project = projects.find((p) => p.id === activeProjectId);
       if (!project) return;
+      // Externalize images so the snapshot embeds pblob: refs, not base64.
+      // Blobs were already stored by the saveNow() above, so this just re-hashes
+      // to refs.
+      const externalized = await externalizeProject({
+        ...project,
+        updatedAt: Date.now(),
+      });
       const snapshot: Snapshot = {
         id: generateId(),
         projectId: activeProjectId,
         name: trimmed,
         createdAt: Date.now(),
-        project: { ...project, updatedAt: Date.now() },
+        project: externalized,
       };
       await putSnapshot(snapshot);
       await refreshSnapshots();
@@ -756,19 +772,25 @@ export const EditorProvider = ({ children }: { children: ReactNode }) => {
     async (snapshotId: string) => {
       await deleteSnapshotDb(snapshotId);
       await refreshSnapshots();
+      void sweepBlobs(projects).catch((err) =>
+        console.error("Blob sweep after deleteSnapshot failed:", err),
+      );
     },
-    [refreshSnapshots],
+    [refreshSnapshots, projects],
   );
 
   const exportProjectToFile = useCallback(
-    (projectId?: string) => {
+    async (projectId?: string) => {
       const target = projects.find((p) => p.id === (projectId ?? activeProjectId));
       if (!target) return;
+      // Re-inline image blobs to base64 so the exported file is self-contained
+      // and portable (the importing machine has no blob store).
+      const portable = await inlineProject(target);
       const payload = {
         format: "prestige-project",
         version: 1,
         exportedAt: new Date().toISOString(),
-        project: target,
+        project: portable,
       };
       const blob = new Blob([JSON.stringify(payload, null, 2)], {
         type: "application/json",
@@ -979,7 +1001,11 @@ export const EditorProvider = ({ children }: { children: ReactNode }) => {
         activeDeviceImg ??
         liveScreenshot.devices.find((d) => !!d.screenshotSrc)?.screenshotSrc;
       if (!anyImg) return null;
-      return extractAndCacheScreenDescription(liveScreenshot.id, anyImg);
+      // The image may be a pblob: ref; vision needs a self-contained data URL
+      // (it materializes one to a temp file). Resolve before extracting.
+      const dataUrl = await resolveToDataUrl(anyImg);
+      if (!dataUrl) return null;
+      return extractAndCacheScreenDescription(liveScreenshot.id, dataUrl);
     },
     [activeScreenshotId, screenshots, extractAndCacheScreenDescription],
   );
@@ -2640,6 +2666,12 @@ export const EditorProvider = ({ children }: { children: ReactNode }) => {
     // the deleted record in storage and it reappears on the next reload.
     try {
       await deleteProjectDb(id);
+      // Reclaim image blobs no longer referenced by a surviving project or
+      // snapshot. Pass the in-memory survivors as live roots so blobs they
+      // reference (but haven't re-persisted yet) aren't swept. Best-effort.
+      void sweepBlobs(remaining).catch((err) =>
+        console.error("Blob sweep after deleteProject failed:", err),
+      );
     } catch (err) {
       console.error(`Failed to delete project ${id}:`, err);
     }
@@ -3168,8 +3200,15 @@ export const EditorProvider = ({ children }: { children: ReactNode }) => {
     event.target.value = "";
   };
 
-  const getBackgroundStyle = (screenshot: Screenshot) => {
-    if (screenshot.backgroundMode === "image" && screenshot.backgroundImageSrc) {
+  const getBackgroundStyle = (
+    screenshot: Screenshot,
+    resolvedImageUrl?: string | null,
+  ) => {
+    // The background image field holds a `pblob:` ref; the caller resolves it
+    // to a usable object URL via useResolvedImage and passes it in. Fall back to
+    // solid color while it's still resolving.
+    const bgUrl = resolvedImageUrl ?? null;
+    if (screenshot.backgroundMode === "image" && bgUrl) {
       // Layered background:
       //   1. Optional overlay (when opacity < 1): semi-transparent
       //      backgroundColor that tints the image toward the bg color so
@@ -3182,11 +3221,11 @@ export const EditorProvider = ({ children }: { children: ReactNode }) => {
       const opacity = screenshot.backgroundImageOpacity ?? 1;
       const overlayAlpha = Math.max(0, Math.min(1, 1 - opacity));
       if (overlayAlpha === 0) {
-        return `url("${screenshot.backgroundImageSrc}") center / cover no-repeat, ${screenshot.backgroundColor}`;
+        return `url("${bgUrl}") center / cover no-repeat, ${screenshot.backgroundColor}`;
       }
       const { r, g, b } = hexToRgb(screenshot.backgroundColor);
       const overlay = `linear-gradient(rgba(${r},${g},${b},${overlayAlpha}), rgba(${r},${g},${b},${overlayAlpha}))`;
-      return `${overlay}, url("${screenshot.backgroundImageSrc}") center / cover no-repeat, ${screenshot.backgroundColor}`;
+      return `${overlay}, url("${bgUrl}") center / cover no-repeat, ${screenshot.backgroundColor}`;
     }
     if (screenshot.backgroundMode === "gradient") {
       if (screenshot.customGradient) {

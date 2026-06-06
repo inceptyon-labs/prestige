@@ -24,8 +24,11 @@ import {
   exists,
   mkdir,
   readDir,
+  readFile,
   readTextFile,
   remove,
+  rename,
+  writeFile,
   writeTextFile,
 } from "@tauri-apps/plugin-fs";
 import type { Project } from "../../types";
@@ -34,6 +37,7 @@ import type { Snapshot, StorageBackend } from "./backend";
 const APPDATA = { baseDir: BaseDirectory.AppData } as const;
 const PROJECTS_DIR = "projects";
 const SNAPSHOTS_DIR = "snapshots";
+const BLOBS_DIR = "blobs";
 const META_FILE = "meta.json";
 
 interface MetaShape {
@@ -46,11 +50,13 @@ const ensureDirs = async (): Promise<void> => {
   // mkdir is a no-op if the directory already exists (recursive).
   await mkdir(PROJECTS_DIR, { ...APPDATA, recursive: true });
   await mkdir(SNAPSHOTS_DIR, { ...APPDATA, recursive: true });
+  await mkdir(BLOBS_DIR, { ...APPDATA, recursive: true });
 };
 
 const projectPath = (id: string) => `${PROJECTS_DIR}/${encodeURIComponent(id)}.json`;
 const snapshotPath = (id: string) =>
   `${SNAPSHOTS_DIR}/${encodeURIComponent(id)}.json`;
+const blobPath = (hash: string) => `${BLOBS_DIR}/${encodeURIComponent(hash)}`;
 
 const readJson = async <T>(path: string): Promise<T | undefined> => {
   try {
@@ -74,25 +80,18 @@ const readJson = async <T>(path: string): Promise<T | undefined> => {
 };
 
 const writeJson = async (path: string, value: unknown): Promise<void> => {
-  // Write to a temp file first, then rename it to the target path.
-  // This is safer against crashes mid-write, since the old file remains
-  // intact until the new one is fully synced and renamed.
+  // Write to a temp file, then atomically rename it over the target. The old
+  // file stays intact until the rename, so a crash mid-write can never leave a
+  // truncated/empty primary (the failure mode that produced a 0-byte project
+  // file previously). Single write, no read-modify gap.
   const tempPath = `${path}.tmp`;
   const json = JSON.stringify(value, null, 2);
   try {
     await writeTextFile(tempPath, json, APPDATA);
-    // Tauri doesn't expose rename/move, so we delete old then write new.
-    // For single-writer loads (like this), delete+write is acceptable since
-    // a crash between means we lose the new data but not corrupt the old.
-    // TODO: use fs:scope "allow-rename" once Tauri exposes it.
-    if (await exists(path, APPDATA)) {
-      await remove(path, APPDATA);
-    }
-    await writeTextFile(path, json, APPDATA);
-    // Clean up temp file if it still exists (shouldn't, but be safe).
-    if (await exists(tempPath, APPDATA)) {
-      await remove(tempPath, APPDATA);
-    }
+    await rename(tempPath, path, {
+      oldPathBaseDir: BaseDirectory.AppData,
+      newPathBaseDir: BaseDirectory.AppData,
+    });
   } catch (err) {
     // If something failed, try to clean up the temp file.
     try {
@@ -227,6 +226,48 @@ export const createFSBackend = (): StorageBackend => {
       return readJson<Snapshot>(snapshotPath(id));
     },
 
+    async putBlob(hash, blob) {
+      await ready;
+      const bytes = new Uint8Array(await blob.arrayBuffer());
+      // Atomic: write temp then rename, same as writeJson.
+      const path = blobPath(hash);
+      const tempPath = `${path}.tmp`;
+      await writeFile(tempPath, bytes, APPDATA);
+      await rename(tempPath, path, {
+        oldPathBaseDir: BaseDirectory.AppData,
+        newPathBaseDir: BaseDirectory.AppData,
+      });
+    },
+
+    async getBlob(hash) {
+      await ready;
+      const path = blobPath(hash);
+      if (!(await exists(path, APPDATA))) return undefined;
+      const bytes = await readFile(path, APPDATA);
+      return new Blob([bytes as BlobPart]);
+    },
+
+    async hasBlob(hash) {
+      await ready;
+      return exists(blobPath(hash), APPDATA);
+    },
+
+    async listBlobHashes() {
+      await ready;
+      const entries = await readDir(BLOBS_DIR, APPDATA);
+      return entries
+        .filter((e) => e.name && !e.name.endsWith(".tmp"))
+        .map((e) => decodeURIComponent(e.name!));
+    },
+
+    async deleteBlob(hash) {
+      await ready;
+      const path = blobPath(hash);
+      if (await exists(path, APPDATA)) {
+        await remove(path, APPDATA);
+      }
+    },
+
     async getMeta<T = unknown>(key: string) {
       await ready;
       const meta = await loadMeta();
@@ -261,6 +302,12 @@ export const createFSBackend = (): StorageBackend => {
       for (const entry of snapEntries) {
         if (entry.name?.endsWith(".json")) {
           await remove(`${SNAPSHOTS_DIR}/${entry.name}`, APPDATA);
+        }
+      }
+      const blobEntries = await readDir(BLOBS_DIR, APPDATA);
+      for (const entry of blobEntries) {
+        if (entry.name) {
+          await remove(`${BLOBS_DIR}/${entry.name}`, APPDATA);
         }
       }
       if (await exists(META_FILE, APPDATA)) {

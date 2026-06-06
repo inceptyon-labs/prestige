@@ -15,6 +15,7 @@ import { STYLES } from "./constants";
 import { GenerateImageModal } from "../GenerateImageModal";
 import { ColorInput } from "./ColorInput";
 import { useEditor } from "../../context/EditorContext";
+import { useResolvedImage } from "../../lib/storage/image-store";
 
 interface BackgroundPickerProps {
   screenshot: Screenshot;
@@ -28,6 +29,7 @@ export const BackgroundPicker = ({
   onUpdateScreenshot,
 }: BackgroundPickerProps) => {
   const { clearBackgroundImage, screenshots } = useEditor();
+  const resolvedBg = useResolvedImage(screenshot.backgroundImageSrc);
   const [isImageModalOpen, setIsImageModalOpen] = useState(false);
 
   // Collect solid background colors used by the other screenshots so the user
@@ -119,7 +121,7 @@ export const BackgroundPicker = ({
             {screenshot.backgroundImageSrc && (
               <div className="relative rounded-md overflow-hidden border border-white/10">
                 <img
-                  src={screenshot.backgroundImageSrc}
+                  src={resolvedBg ?? undefined}
                   alt="Generated background"
                   className="w-full h-24 object-cover"
                   style={{ opacity: screenshot.backgroundImageOpacity ?? 1 }}

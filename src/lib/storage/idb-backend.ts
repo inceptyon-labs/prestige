@@ -9,7 +9,7 @@ import type { Project } from "../../types";
 import type { Snapshot, StorageBackend } from "./backend";
 
 const DB_NAME = "prestige";
-const DB_VERSION = 1;
+const DB_VERSION = 2;
 const LEGACY_LOCALSTORAGE_KEY = "app-screenshot-editor-state";
 const MIGRATION_FLAG = "migrated:localstorage-v1";
 
@@ -26,6 +26,10 @@ interface PrestigeSchema extends DBSchema {
   meta: {
     key: string;
     value: { key: string; value: unknown };
+  };
+  blobs: {
+    key: string;
+    value: Blob;
   };
 }
 
@@ -44,6 +48,10 @@ const getDB = (): Promise<IDBPDatabase<PrestigeSchema>> => {
         }
         if (!db.objectStoreNames.contains("meta")) {
           db.createObjectStore("meta", { keyPath: "key" });
+        }
+        // v2: content-addressed image blobs (key = content hash, no keyPath).
+        if (!db.objectStoreNames.contains("blobs")) {
+          db.createObjectStore("blobs");
         }
       },
     });
@@ -134,6 +142,32 @@ export const createIDBBackend = (): StorageBackend => ({
     return db.get("snapshots", id);
   },
 
+  async putBlob(hash, blob) {
+    const db = await getDB();
+    await db.put("blobs", blob, hash);
+  },
+
+  async getBlob(hash) {
+    const db = await getDB();
+    return db.get("blobs", hash);
+  },
+
+  async hasBlob(hash) {
+    const db = await getDB();
+    const key = await db.getKey("blobs", hash);
+    return key !== undefined;
+  },
+
+  async listBlobHashes() {
+    const db = await getDB();
+    return db.getAllKeys("blobs") as Promise<string[]>;
+  },
+
+  async deleteBlob(hash) {
+    const db = await getDB();
+    await db.delete("blobs", hash);
+  },
+
   async getMeta<T = unknown>(key: string) {
     const db = await getDB();
     const row = await db.get("meta", key);
@@ -188,12 +222,13 @@ export const createIDBBackend = (): StorageBackend => ({
   async clearAll() {
     const db = await getDB();
     const tx = db.transaction(
-      ["projects", "snapshots", "meta"],
+      ["projects", "snapshots", "meta", "blobs"],
       "readwrite",
     );
     await tx.objectStore("projects").clear();
     await tx.objectStore("snapshots").clear();
     await tx.objectStore("meta").clear();
+    await tx.objectStore("blobs").clear();
     await tx.done;
     try {
       localStorage.removeItem(LEGACY_LOCALSTORAGE_KEY);
