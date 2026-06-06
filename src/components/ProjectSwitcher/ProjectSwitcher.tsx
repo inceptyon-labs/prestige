@@ -2,7 +2,7 @@
  * ProjectSwitcher Component
  *
  * Dropdown component for managing projects. Allows users to:
- * - View all projects, with platform-variant siblings grouped under their app
+ * - View all projects as an App → Platform → Language tree
  * - Switch between projects
  * - Create new projects
  * - Rename existing projects
@@ -10,6 +10,10 @@
  * - Duplicate a project as a new platform variant (iPhone → iPad/Mac/Android/etc.)
  * - Duplicate a project as a localized variant (English → Spanish/French/etc.),
  *   AI-translating its copy
+ *
+ * Variants of one app (shared `groupId`) are grouped by platform; platforms
+ * with multiple languages nest those languages under a collapsible subgroup,
+ * while single-language platforms render as a flat row.
  */
 
 import { useState, useRef, useEffect, useMemo, useLayoutEffect } from "react";
@@ -23,18 +27,27 @@ import {
   Trash2,
   Check,
   X,
-  Layers,
   Languages,
   Loader2,
 } from "lucide-react";
 import { useEditor } from "../../context/EditorContext";
-import { PLATFORMS, LOCALES, getLocale } from "../../constants";
+import { PLATFORMS, LOCALES, getLocale, getPlatform } from "../../constants";
+import { PlatformMenuButton } from "../AISuggest";
 import type { PlatformKey, Project } from "../../types";
 
 type ProjectRowProps = {
   project: Project;
   isActive: boolean;
-  isVariant: boolean;
+  /** Indentation level: 0 standalone, 1 platform row, 2 language leaf. */
+  depth?: 0 | 1 | 2;
+  /** Explicit display label; falls back to the project's own name. */
+  label?: string;
+  /** Show the "duplicate as platform" action (hidden on language leaves). */
+  showDuplicatePlatform?: boolean;
+  /** Platforms already present in this app group (omitted from the menu). */
+  excludePlatforms?: readonly PlatformKey[];
+  /** Locales already present for this platform (omitted from the menu). */
+  excludeLocales?: readonly string[];
   onSelect: () => void;
   onRename: (name: string) => void;
   onDelete: () => Promise<void>;
@@ -44,10 +57,20 @@ type ProjectRowProps = {
   canDelete: boolean;
 };
 
+const DEPTH_PADDING: Record<0 | 1 | 2, string> = {
+  0: "",
+  1: "pl-9",
+  2: "pl-14",
+};
+
 const ProjectRow = ({
   project,
   isActive,
-  isVariant,
+  depth = 0,
+  label,
+  showDuplicatePlatform = true,
+  excludePlatforms,
+  excludeLocales,
   onSelect,
   onRename,
   onDelete,
@@ -58,18 +81,12 @@ const ProjectRow = ({
 }: ProjectRowProps) => {
   const [isEditing, setIsEditing] = useState(false);
   const [editName, setEditName] = useState(project.name);
-  const [isPlatformMenuOpen, setIsPlatformMenuOpen] = useState(false);
   const [isLocaleMenuOpen, setIsLocaleMenuOpen] = useState(false);
-  const [menuPos, setMenuPos] = useState<{ top: number; left: number } | null>(
-    null,
-  );
   const [localeMenuPos, setLocaleMenuPos] = useState<{
     top: number;
     left: number;
   } | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
-  const platformMenuRef = useRef<HTMLDivElement>(null);
-  const platformBtnRef = useRef<HTMLButtonElement>(null);
   const localeMenuRef = useRef<HTMLDivElement>(null);
   const localeBtnRef = useRef<HTMLButtonElement>(null);
 
@@ -79,22 +96,6 @@ const ProjectRow = ({
       inputRef.current.select();
     }
   }, [isEditing]);
-
-  useEffect(() => {
-    if (!isPlatformMenuOpen) return;
-    const onDocClick = (e: MouseEvent) => {
-      const target = e.target as Node;
-      if (
-        platformMenuRef.current?.contains(target) ||
-        platformBtnRef.current?.contains(target)
-      ) {
-        return;
-      }
-      setIsPlatformMenuOpen(false);
-    };
-    document.addEventListener("mousedown", onDocClick);
-    return () => document.removeEventListener("mousedown", onDocClick);
-  }, [isPlatformMenuOpen]);
 
   useEffect(() => {
     if (!isLocaleMenuOpen) return;
@@ -111,14 +112,6 @@ const ProjectRow = ({
     document.addEventListener("mousedown", onDocClick);
     return () => document.removeEventListener("mousedown", onDocClick);
   }, [isLocaleMenuOpen]);
-
-  // Anchor the portal-rendered menu to the trigger button's screen position.
-  // Re-measure on open so it tracks the button if the row scrolls.
-  useLayoutEffect(() => {
-    if (!isPlatformMenuOpen || !platformBtnRef.current) return;
-    const rect = platformBtnRef.current.getBoundingClientRect();
-    setMenuPos({ top: rect.bottom + 4, left: rect.right - 176 });
-  }, [isPlatformMenuOpen]);
 
   useLayoutEffect(() => {
     if (!isLocaleMenuOpen || !localeBtnRef.current) return;
@@ -139,26 +132,12 @@ const ProjectRow = ({
     }
   };
 
-  // Variant rows show only the platform (and locale) label, since the group
-  // name above already states the app name. Standalone or first-of-group rows
-  // show the full project name.
-  const localeLabel = project.locale
-    ? getLocale(project.locale)?.label
-    : null;
-  const displayLabel = isVariant
-    ? [
-        PLATFORMS.find((p) => p.key === project.platform)?.label,
-        localeLabel,
-      ]
-        .filter(Boolean)
-        .join(" — ") || project.name
-    : project.name;
+  const displayLabel = label ?? project.name;
+  const indent = DEPTH_PADDING[depth];
 
   if (isEditing) {
     return (
-      <div
-        className={`flex items-center gap-2 px-3 py-2 ${isVariant ? "pl-9" : ""}`}
-      >
+      <div className={`flex items-center gap-2 px-3 py-2 ${indent}`}>
         <input
           ref={inputRef}
           type="text"
@@ -187,20 +166,23 @@ const ProjectRow = ({
     );
   }
 
-  // Platforms already taken by siblings shouldn't be re-offered. We don't have
-  // sibling info here, so we just disable the project's *own* platform.
-  const availablePlatforms = PLATFORMS.filter(
-    (p) => p.key !== project.platform,
-  );
+  // Exclude the project's own locale plus any locales already present for this
+  // platform in the group (passed down as `excludeLocales`).
+  const takenLocales = new Set<string | undefined>([
+    project.locale,
+    ...(excludeLocales ?? []),
+  ]);
+  const availableLocales = LOCALES.filter((l) => !takenLocales.has(l.key));
 
-  // Languages: offer every preset locale except this project's own.
-  const availableLocales = LOCALES.filter((l) => l.key !== project.locale);
+  // Exclude the project's own platform plus any platforms already in the group.
+  const takenPlatforms: PlatformKey[] = [
+    ...(project.platform ? [project.platform] : []),
+    ...(excludePlatforms ?? []),
+  ];
 
   return (
     <div
-      className={`group flex items-center justify-between px-3 py-2 cursor-pointer transition-colors ${
-        isVariant ? "pl-9" : ""
-      } ${
+      className={`group flex items-center justify-between px-3 py-2 cursor-pointer transition-colors ${indent} ${
         isActive
           ? "bg-violet-600/20 text-violet-400"
           : "hover:bg-zinc-800 text-zinc-300"
@@ -216,17 +198,12 @@ const ProjectRow = ({
       </div>
 
       <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-        <button
-          ref={platformBtnRef}
-          onClick={(e) => {
-            e.stopPropagation();
-            setIsPlatformMenuOpen((v) => !v);
-          }}
-          className="p-1 hover:bg-zinc-700 rounded text-zinc-400 hover:text-white"
-          title="Duplicate as platform variant"
-        >
-          <Layers className="w-3.5 h-3.5" />
-        </button>
+        {showDuplicatePlatform && (
+          <PlatformMenuButton
+            onSelect={onDuplicateAsPlatform}
+            exclude={takenPlatforms}
+          />
+        )}
         <button
           ref={localeBtnRef}
           disabled={isLocalizing}
@@ -266,36 +243,7 @@ const ProjectRow = ({
             <Trash2 className="w-3.5 h-3.5" />
           </button>
         )}
-
       </div>
-      {isPlatformMenuOpen &&
-        menuPos &&
-        createPortal(
-          <div
-            ref={platformMenuRef}
-            data-platform-menu
-            style={{ position: "fixed", top: menuPos.top, left: menuPos.left }}
-            className="w-44 bg-zinc-900 border border-zinc-700 rounded-lg shadow-xl z-[120] overflow-hidden"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div className="px-3 py-1.5 text-[10px] uppercase tracking-wide text-zinc-500 border-b border-zinc-800">
-              Duplicate as
-            </div>
-            {availablePlatforms.map((p) => (
-              <button
-                key={p.key}
-                onClick={() => {
-                  onDuplicateAsPlatform(p.key);
-                  setIsPlatformMenuOpen(false);
-                }}
-                className="w-full text-left px-3 py-1.5 text-sm text-zinc-200 hover:bg-zinc-800 transition-colors"
-              >
-                {p.label}
-              </button>
-            ))}
-          </div>,
-          document.body,
-        )}
       {isLocaleMenuOpen &&
         localeMenuPos &&
         createPortal(
@@ -332,38 +280,114 @@ const ProjectRow = ({
   );
 };
 
-type ProjectGroup = {
-  groupKey: string;
-  groupName: string | null; // null for standalone single-project entries
+// --- Grouping: App → Platform → Language ----------------------------------
+
+type PlatformNode = {
+  /** `${groupId}:${platform}` — collapse key for this platform subgroup. */
+  key: string;
+  platform?: PlatformKey;
+  platformLabel: string;
+  /** Base (no locale) first, then localized variants in LOCALES order. */
   projects: Project[];
 };
 
-const groupProjects = (projects: Project[]): ProjectGroup[] => {
-  const groups = new Map<string, ProjectGroup>();
-  const order: string[] = [];
+type AppNode =
+  | { kind: "solo"; project: Project }
+  | {
+      kind: "group";
+      groupKey: string;
+      groupName: string;
+      total: number;
+      platforms: PlatformNode[];
+    };
+
+const PLATFORM_ORDER = new Map(PLATFORMS.map((p, i) => [p.key, i]));
+const LOCALE_ORDER = new Map(LOCALES.map((l, i) => [l.key, i]));
+
+const stripGroupPrefix = (p: Project) =>
+  p.groupName ?? p.name.replace(/\s+—\s+.+$/, "").trim();
+
+const buildGroupNode = (groupId: string, members: Project[]): AppNode => {
+  const byPlatform = new Map<string, Project[]>();
+  const platformOrder: string[] = [];
+  for (const p of members) {
+    const pk = p.platform ?? "none";
+    if (!byPlatform.has(pk)) {
+      byPlatform.set(pk, []);
+      platformOrder.push(pk);
+    }
+    byPlatform.get(pk)!.push(p);
+  }
+
+  const platforms: PlatformNode[] = platformOrder
+    .map((pk) => {
+      const list = byPlatform.get(pk)!;
+      list.sort((a, b) => {
+        // Base (no locale) first, then by LOCALES order.
+        if (!a.locale && b.locale) return -1;
+        if (a.locale && !b.locale) return 1;
+        return (
+          (a.locale ? (LOCALE_ORDER.get(a.locale) ?? 0) : 0) -
+          (b.locale ? (LOCALE_ORDER.get(b.locale) ?? 0) : 0)
+        );
+      });
+      const platform = pk === "none" ? undefined : (pk as PlatformKey);
+      const platformLabel = platform
+        ? getPlatform(platform).label
+        : stripGroupPrefix(list[0]);
+      return { key: `${groupId}:${pk}`, platform, platformLabel, projects: list };
+    })
+    .sort(
+      (a, b) =>
+        (a.platform ? (PLATFORM_ORDER.get(a.platform) ?? 99) : 99) -
+        (b.platform ? (PLATFORM_ORDER.get(b.platform) ?? 99) : 99),
+    );
+
+  return {
+    kind: "group",
+    groupKey: groupId,
+    groupName: stripGroupPrefix(members[0]),
+    total: members.length,
+    platforms,
+  };
+};
+
+const groupProjects = (projects: Project[]): AppNode[] => {
+  // Walk once, preserving first-seen order: a solo takes its own slot; a
+  // grouped app takes the slot of its first member, accumulating the rest.
+  const slots: Array<{ kind: "solo"; project: Project } | { kind: "group"; groupId: string }> =
+    [];
+  const members = new Map<string, Project[]>();
+
   for (const p of projects) {
     if (p.groupId) {
-      if (!groups.has(p.groupId)) {
-        groups.set(p.groupId, {
-          groupKey: p.groupId,
-          groupName: p.groupName ?? p.name,
-          projects: [],
-        });
-        order.push(p.groupId);
+      if (!members.has(p.groupId)) {
+        members.set(p.groupId, []);
+        slots.push({ kind: "group", groupId: p.groupId });
       }
-      groups.get(p.groupId)!.projects.push(p);
+      members.get(p.groupId)!.push(p);
     } else {
-      const key = `solo-${p.id}`;
-      groups.set(key, {
-        groupKey: key,
-        groupName: null,
-        projects: [p],
-      });
-      order.push(key);
+      slots.push({ kind: "solo", project: p });
     }
   }
-  return order.map((k) => groups.get(k)!);
+
+  return slots.map((slot) =>
+    slot.kind === "solo"
+      ? { kind: "solo" as const, project: slot.project }
+      : buildGroupNode(slot.groupId, members.get(slot.groupId)!),
+  );
 };
+
+/** Label for a flat (single-language) platform row. */
+const flatPlatformLabel = (node: PlatformNode): string => {
+  const p = node.projects[0];
+  const locale = p.locale ? getLocale(p.locale)?.label : null;
+  return locale ? `${node.platformLabel} — ${locale}` : node.platformLabel;
+};
+
+/** Label for a language leaf row. */
+const localeLeafLabel = (p: Project): string =>
+  p.locale ? (getLocale(p.locale)?.label ?? p.locale) : "Base";
 
 export const ProjectSwitcher = () => {
   const {
@@ -388,25 +412,39 @@ export const ProjectSwitcher = () => {
 
   const grouped = useMemo(() => groupProjects(projects), [projects]);
 
-  // Auto-expand the group containing the active project; remember collapse
-  // state for the rest within the session.
+  // Two-level collapse state, keyed by app groupId and `${groupId}:${platform}`.
+  // Default: app groups expanded, platform subgroups collapsed (the active
+  // project's subgroup is force-expanded by the effect below).
   const [expandedGroups, setExpandedGroups] = useState<Set<string>>(
-    () => new Set(grouped.map((g) => g.groupKey)),
+    () =>
+      new Set(
+        grouped
+          .filter((n): n is Extract<AppNode, { kind: "group" }> =>
+            n.kind === "group",
+          )
+          .map((g) => g.groupKey),
+      ),
   );
 
   useEffect(() => {
-    const activeGroup = grouped.find((g) =>
-      g.projects.some((p) => p.id === activeProjectId),
-    );
-    if (activeGroup && !expandedGroups.has(activeGroup.groupKey)) {
-      setExpandedGroups((prev) => new Set(prev).add(activeGroup.groupKey));
-    }
-  }, [activeProjectId, grouped, expandedGroups]);
+    const active = projects.find((p) => p.id === activeProjectId);
+    if (!active?.groupId) return;
+    const groupKey = active.groupId;
+    const platformKey = `${active.groupId}:${active.platform ?? "none"}`;
+    setExpandedGroups((prev) => {
+      if (prev.has(groupKey) && prev.has(platformKey)) return prev;
+      const next = new Set(prev);
+      next.add(groupKey);
+      next.add(platformKey);
+      return next;
+    });
+  }, [activeProjectId, projects]);
 
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
-      const target = e.target as Element | null;
-      if (!dropdownRef.current || dropdownRef.current.contains(target as Node)) {
+      if (!(e.target instanceof Element)) return;
+      const target = e.target;
+      if (!dropdownRef.current || dropdownRef.current.contains(target)) {
         return;
       }
       // The "Duplicate as platform" and "Duplicate as language" menus are
@@ -414,7 +452,10 @@ export const ProjectSwitcher = () => {
       // Keep the dropdown open when a click lands inside one of those portal
       // menus — otherwise React unmounts the menu between mousedown and click
       // and the menu item's click handler never fires.
-      if (target?.closest("[data-platform-menu]") || target?.closest("[data-locale-menu]")) {
+      if (
+        target?.closest("[data-platform-menu]") ||
+        target?.closest("[data-locale-menu]")
+      ) {
         return;
       }
       setIsOpen(false);
@@ -456,6 +497,23 @@ export const ProjectSwitcher = () => {
     });
   };
 
+  const canDelete = projects.length > 1;
+
+  const rowHandlers = (p: Project) => ({
+    onSelect: () => {
+      switchProject(p.id);
+      setIsOpen(false);
+    },
+    onRename: (name: string) => renameProject(p.id, name),
+    onDelete: async () => await deleteProject(p.id),
+    onDuplicateAsLocale: (localeKey: string) => {
+      void duplicateProjectAsLocale(p.id, localeKey);
+      setIsOpen(false);
+    },
+    isLocalizing: localizingProjectId === p.id,
+    canDelete,
+  });
+
   return (
     <div className="relative" ref={dropdownRef}>
       <button
@@ -482,82 +540,134 @@ export const ProjectSwitcher = () => {
           </div>
 
           <div className="max-h-80 overflow-y-auto">
-            {grouped.map((group) => {
-              const isStandalone = group.groupName === null;
-              if (isStandalone) {
-                const p = group.projects[0];
+            {grouped.map((node) => {
+              if (node.kind === "solo") {
+                const p = node.project;
                 return (
                   <ProjectRow
                     key={p.id}
                     project={p}
                     isActive={p.id === activeProjectId}
-                    isVariant={false}
-                    onSelect={() => {
-                      switchProject(p.id);
-                      setIsOpen(false);
-                    }}
-                    onRename={(name) => renameProject(p.id, name)}
-                    onDelete={async () => await deleteProject(p.id)}
+                    depth={0}
                     onDuplicateAsPlatform={(platform) => {
                       duplicateProjectAsPlatform(p.id, platform);
                       setIsOpen(false);
                     }}
-                    onDuplicateAsLocale={(localeKey) => {
-                      void duplicateProjectAsLocale(p.id, localeKey);
-                      setIsOpen(false);
-                    }}
-                    isLocalizing={localizingProjectId === p.id}
-                    canDelete={projects.length > 1}
+                    {...rowHandlers(p)}
                   />
                 );
               }
 
-              const isExpanded = expandedGroups.has(group.groupKey);
+              const groupExpanded = expandedGroups.has(node.groupKey);
               return (
-                <div key={group.groupKey}>
+                <div key={node.groupKey}>
                   <button
-                    onClick={() => toggleGroup(group.groupKey)}
+                    onClick={() => toggleGroup(node.groupKey)}
                     className="w-full flex items-center gap-2 px-3 py-2 text-zinc-200 hover:bg-zinc-800 transition-colors"
                   >
-                    {isExpanded ? (
+                    {groupExpanded ? (
                       <ChevronDown className="w-4 h-4 text-zinc-500" />
                     ) : (
                       <ChevronRight className="w-4 h-4 text-zinc-500" />
                     )}
                     <FolderOpen className="w-4 h-4 text-violet-400" />
                     <span className="text-sm font-medium flex-1 text-left truncate">
-                      {group.groupName}
+                      {node.groupName}
                     </span>
                     <span className="text-xs text-zinc-500">
-                      {group.projects.length} variant
-                      {group.projects.length === 1 ? "" : "s"}
+                      {node.total} variant{node.total === 1 ? "" : "s"}
                     </span>
                   </button>
-                  {isExpanded &&
-                    group.projects.map((p) => (
-                      <ProjectRow
-                        key={p.id}
-                        project={p}
-                        isActive={p.id === activeProjectId}
-                        isVariant={true}
-                        onSelect={() => {
-                          switchProject(p.id);
-                          setIsOpen(false);
-                        }}
-                        onRename={(name) => renameProject(p.id, name)}
-                        onDelete={async () => await deleteProject(p.id)}
-                        onDuplicateAsPlatform={(platform) => {
-                          duplicateProjectAsPlatform(p.id, platform);
-                          setIsOpen(false);
-                        }}
-                        onDuplicateAsLocale={(localeKey) => {
-                          void duplicateProjectAsLocale(p.id, localeKey);
-                          setIsOpen(false);
-                        }}
-                        isLocalizing={localizingProjectId === p.id}
-                        canDelete={projects.length > 1}
-                      />
-                    ))}
+
+                  {groupExpanded &&
+                    (() => {
+                      // Platforms already in this app group — offered platform
+                      // duplications must skip them to avoid duplicate siblings.
+                      const presentPlatforms = node.platforms
+                        .map((pf) => pf.platform)
+                        .filter((p): p is PlatformKey => Boolean(p));
+                      return node.platforms.map((pf) => {
+                      // Locales already present for this platform.
+                      const presentLocales = pf.projects
+                        .map((p) => p.locale)
+                        .filter((l): l is NonNullable<typeof l> => Boolean(l));
+                      // Single-language platform → flat row (acts as both the
+                      // platform and its base language; keeps all actions).
+                      if (pf.projects.length === 1) {
+                        const p = pf.projects[0];
+                        return (
+                          <ProjectRow
+                            key={p.id}
+                            project={p}
+                            isActive={p.id === activeProjectId}
+                            depth={1}
+                            label={flatPlatformLabel(pf)}
+                            excludePlatforms={presentPlatforms}
+                            excludeLocales={presentLocales}
+                            onDuplicateAsPlatform={(platform) => {
+                              duplicateProjectAsPlatform(p.id, platform);
+                              setIsOpen(false);
+                            }}
+                            {...rowHandlers(p)}
+                          />
+                        );
+                      }
+
+                      // Multi-language platform → collapsible subgroup.
+                      const base =
+                        pf.projects.find((p) => !p.locale) ?? pf.projects[0];
+                      const platformExpanded = expandedGroups.has(pf.key);
+                      return (
+                        <div key={pf.key}>
+                          <div className="group flex items-center justify-between pl-9 pr-3 py-1.5 text-zinc-300 hover:bg-zinc-800/60 transition-colors">
+                            <button
+                              onClick={() => toggleGroup(pf.key)}
+                              className="flex items-center gap-2 min-w-0 flex-1 text-left"
+                            >
+                              {platformExpanded ? (
+                                <ChevronDown className="w-3.5 h-3.5 text-zinc-500 flex-shrink-0" />
+                              ) : (
+                                <ChevronRight className="w-3.5 h-3.5 text-zinc-500 flex-shrink-0" />
+                              )}
+                              <span className="text-sm truncate">
+                                {pf.platformLabel}
+                              </span>
+                              <span className="text-[11px] text-zinc-500 flex-shrink-0">
+                                {pf.projects.length} langs
+                              </span>
+                            </button>
+                            <div className="opacity-0 group-hover:opacity-100 transition-opacity">
+                              <PlatformMenuButton
+                                onSelect={(platform) => {
+                                  duplicateProjectAsPlatform(base.id, platform);
+                                  setIsOpen(false);
+                                }}
+                                exclude={presentPlatforms}
+                              />
+                            </div>
+                          </div>
+
+                          {platformExpanded &&
+                            pf.projects.map((p) => (
+                              <ProjectRow
+                                key={p.id}
+                                project={p}
+                                isActive={p.id === activeProjectId}
+                                depth={2}
+                                label={localeLeafLabel(p)}
+                                showDuplicatePlatform={false}
+                                excludeLocales={presentLocales}
+                                onDuplicateAsPlatform={(platform) => {
+                                  duplicateProjectAsPlatform(p.id, platform);
+                                  setIsOpen(false);
+                                }}
+                                {...rowHandlers(p)}
+                              />
+                            ))}
+                        </div>
+                      );
+                    });
+                    })()}
                 </div>
               );
             })}
