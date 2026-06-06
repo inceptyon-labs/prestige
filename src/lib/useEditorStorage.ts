@@ -98,6 +98,12 @@ export const useEditorStorage = (
   // Serialize all writes through this promise so that debounce + flush +
   // beforeunload can't race each other and interleave transactions.
   const saveChainRef = useRef<Promise<void>>(Promise.resolve());
+  // Dirty tracking: maps each persisted project id to the in-memory object
+  // reference that was last saved. `updateProjectState` only clones the active
+  // project on edit, so a reference mismatch precisely identifies which
+  // projects changed — we then re-serialize only those, not all 14.
+  const lastSavedRef = useRef<Map<string, Project>>(new Map());
+  const lastSavedActiveIdRef = useRef<string | null>(null);
 
   pendingProjectsRef.current = projects;
   pendingActiveIdRef.current = activeProjectId;
@@ -139,16 +145,30 @@ export const useEditorStorage = (
     const next = saveChainRef.current.then(async () => {
       const projectsToSave = pendingProjectsRef.current;
       const activeIdToSave = pendingActiveIdRef.current;
+
+      // Only persist projects whose in-memory reference changed since the last
+      // save (plus the active-id if it changed). saveEditorState is upsert-only,
+      // so writing just the dirty subset is correct; deletions go through
+      // deleteProject directly.
+      const dirty = projectsToSave.filter(
+        (p) => lastSavedRef.current.get(p.id) !== p,
+      );
+      const activeIdChanged = lastSavedActiveIdRef.current !== activeIdToSave;
+      if (dirty.length === 0 && !activeIdChanged) return;
+
       setIsSaving(true);
       setSaveError(null);
       try {
         // Externalize inline data: images into the content-addressed blob
         // store, so persisted project JSON holds short pblob: refs (not MB of
         // base64). Identical images dedupe to one blob.
-        const externalized = await Promise.all(
-          projectsToSave.map(externalizeProject),
-        );
+        const externalized = await Promise.all(dirty.map(externalizeProject));
         await saveEditorState(externalized, activeIdToSave);
+        // Mark everything currently in memory as clean (by reference).
+        const nextMap = new Map<string, Project>();
+        for (const p of projectsToSave) nextMap.set(p.id, p);
+        lastSavedRef.current = nextMap;
+        lastSavedActiveIdRef.current = activeIdToSave;
         setLastSaved(Date.now());
       } catch (err) {
         console.error("Failed to save editor state:", err);
